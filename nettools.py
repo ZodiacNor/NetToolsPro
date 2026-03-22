@@ -7,7 +7,7 @@ A comprehensive, portable network diagnostic and utility toolkit for Windows.
 Author:      Bengt Simon Røch Dragseth
 License:     MIT License
 Copyright:   Copyright (c) 2026 Bengt Simon Røch Dragseth
-Repository:  https://github.com/BengtDragseth/NetToolsPro
+Repository:  https://github.com/ZodiacNor/NetToolsPro
 """
 
 __version__   = "1.0.0"
