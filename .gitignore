@@ -1,0 +1,21 @@
+﻿# Build output - do not commit
+dist/
+build/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# PyInstaller
+*.spec.bak
+
+# OS junk
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Editor folders
+.vscode/
+.idea/
