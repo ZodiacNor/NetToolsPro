@@ -1,0 +1,468 @@
+﻿========================================
+AKTIVE TJENESTER (103)
+========================================
+
+Name                           DisplayName                                                        Status StartType
+----                           -----------                                                        ------ ---------
+camsvc                         Administrasjonstjeneste for funksjonstilgang                      Running Automatic
+Appinfo                        Application Information                                           Running    Manual
+AppXSvc                        AppX Deployment Service (AppXSVC)                                 Running Automatic
+ArmouryCrateControlInterface   Armoury Crate Control Interface                                   Running Automatic
+ArmouryCrateService            Armoury Crate Service                                             Running Automatic
+LightingService                ASUS AURA SYNC lighting service                                   Running Automatic
+BrokerInfrastructure           Background Tasks Infrastructure Service                           Running Automatic
+BFE                            Base Filtering Engine                                             Running Automatic
+bthserv                        Bluetooth Support Service                                         Running    Manual
+cbdhsvc_cf068                  Brukertjeneste for Utklippstavle_cf068                            Running Automatic
+webthreatdefusersvc_cf068      Brukertjeneste for Web Threat Defense_cf068                       Running Automatic
+CoworkVMService                Claude                                                            Running Automatic
+ClipSVC                        Client License Service (ClipSVC)                                  Running    Manual
+KeyIso                         CNG Key Isolation                                                 Running    Manual
+EventSystem                    COM+ Event System                                                 Running Automatic
+CoreMessagingRegistrar         CoreMessaging                                                     Running Automatic
+VaultSvc                       Credential Manager                                                Running    Manual
+CryptSvc                       Cryptographic Services                                            Running Automatic
+DusmSvc                        Databruk                                                          Running Automatic
+DcomLaunch                     DCOM Server Process Launcher                                      Running Automatic
+DeviceAssociationService       Device Association Service                                        Running    Manual
+DeviceInstall                  Device Install Service                                            Running    Manual
+DevicesFlowUserSvc_cf068       DevicesFlow_cf068                                                 Running    Manual
+DevQueryBroker                 DevQuery Background Discovery Broker                              Running    Manual
+Dhcp                           DHCP Client                                                       Running Automatic
+Dnscache                       DNS Client                                                        Running Automatic
+DolbyDAXAPI                    Dolby DAX API Service                                             Running Automatic
+GameInputRedistService         GameInput Redist Service                                          Running Automatic
+GameSDK Service                GameSDK Service                                                   Running Automatic
+GamingServicesNet              Gaming Services                                                   Running Automatic
+GamingServices                 Gaming Services                                                   Running Automatic
+hidserv                        Human Interface Device Service                                    Running    Manual
+HvHost                         HV Host Service                                                   Running    Manual
+InstallService                 Installeringstjeneste for Microsoft Store                         Running    Manual
+IntelAudioService              Intel(R) Audio Service                                            Running Automatic
+ipfsvc                         Intel(R) Innovation Platform Framework Service                    Running Automatic
+WMIRegistrationService         Intel(R) Management Engine WMI Provider Registration              Running Automatic
+IntelGraphicsSoftwareService   Intel® Graphics Software                                          Running Automatic
+PIEServiceNew                  Intel® PROSet/Wireless Service                                    Running    Manual
+iphlpsvc                       IP Helper                                                         Running Automatic
+LSM                            Local Session Manager                                             Running Automatic
+logi_lamparray_service         Logitech LampArray Service                                        Running Automatic
+WdNisSvc                       Microsoft Defender Antivirus nettverksinspeksjonstjeneste         Running    Manual
+WinDefend                      Microsoft Defender Antivirus-tjeneste                             Running Automatic
+MDCoreSvc                      Microsoft Defender Core Service                                   Running Automatic
+ClickToRunSvc                  Microsoft Office Click-to-Run Service                             Running Automatic
+NgcSvc                         Microsoft Passport                                                Running    Manual
+NgcCtnrSvc                     Microsoft Passport Container                                      Running    Manual
+TokenBroker                    Nettkontoadministrator                                            Running    Manual
+NcbService                     Network Connection Broker                                         Running    Manual
+netprofm                       Network List Service                                              Running    Manual
+nsi                            Network Store Interface Service                                   Running Automatic
+NVDisplay.ContainerLocalSystem NVIDIA Display Container LS                                       Running Automatic
+NvContainerLocalSystem         NVIDIA LocalSystem Container                                      Running Automatic
+UsoSvc                         Oppdater Orchestrator-tjeneste                                    Running Automatic
+CDPUserSvc_cf068               Plattformbrukertjeneste for tilkoblede enheter_cf068              Running Automatic
+CDPSvc                         Plattformtjeneste for tilkoblede enheter                          Running Automatic
+PlugPlay                       Plug and Play                                                     Running    Manual
+Power                          Power                                                             Running Automatic
+Spooler                        Print Spooler                                                     Running Automatic
+RmSvc                          Radiobehandlingstjeneste                                          Running    Manual
+RtkAudioUniversalService       Realtek Audio Universal Service                                   Running Automatic
+RpcSs                          Remote Procedure Call (RPC)                                       Running Automatic
+ROG Live Service               ROG Live Service                                                  Running Automatic
+RpcEptMapper                   RPC Endpoint Mapper                                               Running Automatic
+SamSs                          Security Accounts Manager                                         Running Automatic
+LanmanServer                   Server                                                            Running Automatic
+ShellHWDetection               Shell Hardware Detection                                          Running Automatic
+wscsvc                         Sikkerhetssenter                                                  Running Automatic
+DisplayEnhancementService      Skjermforbedringstjeneste                                         Running    Manual
+StateRepository                State Repository Service                                          Running Automatic
+StorSvc                        Storage Service                                                   Running Automatic
+OneSyncSvc_cf068               Synkroniseringsvert_cf068                                         Running Automatic
+SENS                           System Event Notification Service                                 Running Automatic
+SystemEventsBroker             System Events Broker                                              Running Automatic
+WpnService                     Systemtjenesten Windows Push Notification                         Running Automatic
+Schedule                       Task Scheduler                                                    Running Automatic
+TextInputManagementService     Text Input Management Service                                     Running Automatic
+Themes                         Themes                                                            Running Automatic
+TimeBrokerSvc                  Time Broker                                                       Running    Manual
+CloudBackupRestoreSvc_cf068    Tjeneste for sikkerhetskopiering og gjenoppretting av skyen_cf068 Running    Manual
+SecurityHealthService          Tjenesten Windows Sikkerhet                                       Running    Manual
+NPSMSvc_cf068                  Tjenesten øktbehandling for avspilling_cf068                      Running    Manual
+UdkUserSvc_cf068               Udk-brukertjeneste_cf068                                          Running    Manual
+UserManager                    User Manager                                                      Running Automatic
+ProfSvc                        User Profile Service                                              Running Automatic
+DispBrokerDesktopSvc           Vis policytjeneste                                                Running Automatic
+webthreatdefsvc                Web Threat Defense-tjeneste                                       Running    Manual
+Audiosrv                       Windows Audio                                                     Running Automatic
+AudioEndpointBuilder           Windows Audio Endpoint Builder                                    Running Automatic
+Wcmsvc                         Windows Connection Manager                                        Running Automatic
+mpssvc                         Windows Defender Firewall                                         Running Automatic
+EventLog                       Windows Event Log                                                 Running Automatic
+FontCache                      Windows Font Cache Service                                        Running Automatic
+LicenseManager                 Windows License Manager Service                                   Running    Manual
+Winmgmt                        Windows Management Instrumentation                                Running Automatic
+WpnUserService_cf068           Windows Push Notifications User Service_cf068                     Running Automatic
+W32Time                        Windows Time                                                      Running Automatic
+wuauserv                       Windows Update                                                    Running    Manual
+WinHttpAutoProxySvc            WinHTTP Web Proxy Auto-Discovery Service                          Running    Manual
+WlanSvc                        WLAN AutoConfig                                                   Running Automatic
+LanmanWorkstation              Workstation                                                       Running Automatic
+WSAIFabricSvc                  WSAIFabricSvc                                                     Running Automatic
+
+
+
+
+========================================
+DEAKTIVERTE TJENESTER (34)
+========================================
+
+Name                DisplayName                                          Status StartType
+----                -----------                                          ------ ---------
+AsusAppService      ASUS App Service                                    Stopped  Disabled
+AsusCertService     ASUS Certificate Service                            Stopped  Disabled
+ASUSOptimization    ASUS Optimization                                   Stopped  Disabled
+ASUSSoftwareManager ASUS Software Manager                               Stopped  Disabled
+ASUSSwitch          ASUS Switch                                         Stopped  Disabled
+ASUSSystemAnalysis  ASUS System Analysis                                Stopped  Disabled
+ASUSSystemDiagnosis ASUS System Diagnosis                               Stopped  Disabled
+AsusPTPService      AsusPTPService                                      Stopped  Disabled
+tzautoupdate        Automatisk oppdatering for tidssone                 Stopped  Disabled
+DiagTrack           Connected User Experiences and Telemetry            Stopped  Disabled
+DsSvc               Data Sharing Service                                Stopped  Disabled
+DPS                 Diagnostic Policy Service                           Stopped  Disabled
+WdiServiceHost      Diagnostic Service Host                             Stopped  Disabled
+WdiSystemHost       Diagnostic System Host                              Stopped  Disabled
+TrkWks              Distributed Link Tracking Client                    Stopped  Disabled
+lfsvc               Geolocation Service                                 Stopped  Disabled
+SharedAccess        Internet Connection Sharing (ICS)                   Stopped  Disabled
+ssh-agent           OpenSSH Authentication Agent                        Stopped  Disabled
+PcaSvc              Program Compatibility Assistant Service             Stopped  Disabled
+RemoteRegistry      Remote Registry                                     Stopped  Disabled
+RemoteAccess        Routing and Remote Access                           Stopped  Disabled
+shpamsvc            Shared PC Account Manager                           Stopped  Disabled
+SSDPSRV             SSDP Discovery                                      Stopped  Disabled
+SysMain             SysMain                                             Stopped  Disabled
+lmhosts             TCP/IP NetBIOS Helper                               Stopped  Disabled
+TapiSrv             Telephony                                           Stopped  Disabled
+NetTcpPortSharing   Tjenesten Net.Tcp Port Sharing                      Stopped  Disabled
+hns                 Vertsnettverkstjeneste                              Stopped  Disabled
+InventorySvc        Vurderingstjeneste for beholdning og kompatibilitet Stopped  Disabled
+StiSvc              Windows Image Acquisition (WIA)                     Stopped  Disabled
+WSearch             Windows Search                                      Stopped  Disabled
+whesvc              Windows-tilstand og optimaliserte opplevelser       Stopped  Disabled
+wmiApSrv            WMI Performance Adapter                             Stopped  Disabled
+WSLService          WSL Service                                         Stopped  Disabled
+
+
+
+
+========================================
+ALLE TJENESTER (302)
+========================================
+
+Name                                      DisplayName                                                                  
+----                                      -----------                                                                  
+AxInstSV                                  ActiveX Installer (AxInstSV)                                                 
+camsvc                                    Administrasjonstjeneste for funksjonstilgang                                 
+AarSvc_cf068                              Agent Activation Runtime_cf068                                               
+ADPSvc                                    Aggregert dataplattformtjeneste                                              
+TroubleshootingSvc                        Anbefalt feilsøkingstjeneste                                                 
+AppReadiness                              App Readiness                                                                
+AppIDSvc                                  Application Identity                                                         
+Appinfo                                   Application Information                                                      
+ALG                                       Application Layer Gateway Service                                            
+AppXSvc                                   AppX Deployment Service (AppXSVC)                                            
+ArmouryCrateControlInterface              Armoury Crate Control Interface                                              
+ArmouryCrateService                       Armoury Crate Service                                                        
+wlpasvc                                   Assistenttjeneste for lokal profil                                           
+AsusAppService                            ASUS App Service                                                             
+LightingService                           ASUS AURA SYNC lighting service                                              
+AsusCertService                           ASUS Certificate Service                                                     
+ASUSOptimization                          ASUS Optimization                                                            
+ASUSSoftwareManager                       ASUS Software Manager                                                        
+ASUSSwitch                                ASUS Switch                                                                  
+ASUSSystemAnalysis                        ASUS System Analysis                                                         
+ASUSSystemDiagnosis                       ASUS System Diagnosis                                                        
+asus                                      ASUS-oppdatering-tjenesten (asus)                                            
+asusm                                     ASUS-oppdatering-tjenesten (asusm)                                           
+AsusPTPService                            AsusPTPService                                                               
+tzautoupdate                              Automatisk oppdatering for tidssone                                          
+BthAvctpSvc                               AVCTP-tjeneste                                                               
+BITS                                      Background Intelligent Transfer Service                                      
+BrokerInfrastructure                      Background Tasks Infrastructure Service                                      
+BFE                                       Base Filtering Engine                                                        
+battlenet_helpersvc                       Battle.net Update Helper Svc                                                 
+BEService                                 BattlEye Service                                                             
+SEMgrSvc                                  Betalinger og NFC/SE-behandling                                              
+BDESVC                                    BitLocker Drive Encryption Service                                           
+wbengine                                  Block Level Backup Engine Service                                            
+bthserv                                   Bluetooth Support Service                                                    
+BluetoothUserService_cf068                Bluetooth-brukerstøttetjeneste_cf068                                         
+ConsentUxUserSvc_cf068                    Brukertjeneste for ConsentUX_cf068                                           
+cbdhsvc_cf068                             Brukertjeneste for Utklippstavle_cf068                                       
+webthreatdefusersvc_cf068                 Brukertjeneste for Web Threat Defense_cf068                                  
+CaptureService_cf068                      CaptureService_cf068                                                         
+CertPropSvc                               Certificate Propagation                                                      
+CoworkVMService                           Claude                                                                       
+ClipSVC                                   Client License Service (ClipSVC)                                             
+KeyIso                                    CNG Key Isolation                                                            
+EventSystem                               COM+ Event System                                                            
+COMSysApp                                 COM+ System Application                                                      
+DiagTrack                                 Connected User Experiences and Telemetry                                     
+PimIndexMaintenanceSvc_cf068              Contact Data_cf068                                                           
+CoreMessagingRegistrar                    CoreMessaging                                                                
+VaultSvc                                  Credential Manager                                                           
+CredentialEnrollmentManagerUserSvc_cf068  CredentialEnrollmentManagerUserSvc_cf068                                     
+CryptSvc                                  Cryptographic Services                                                       
+DsSvc                                     Data Sharing Service                                                         
+DusmSvc                                   Databruk                                                                     
+DcomLaunch                                DCOM Server Process Launcher                                                 
+dcsvc                                     Deklarert configuration(DC)-tjeneste                                         
+DoSvc                                     Delivery Optimization                                                        
+DeviceAssociationService                  Device Association Service                                                   
+DeviceInstall                             Device Install Service                                                       
+DsmSvc                                    Device Setup Manager                                                         
+DeviceAssociationBrokerSvc_cf068          DeviceAssociationBroker_cf068                                                
+DevicePickerUserSvc_cf068                 DevicePicker_cf068                                                           
+DevicesFlowUserSvc_cf068                  DevicesFlow_cf068                                                            
+DevQueryBroker                            DevQuery Background Discovery Broker                                         
+Dhcp                                      DHCP Client                                                                  
+diagsvc                                   Diagnostic Execution Service                                                 
+DPS                                       Diagnostic Policy Service                                                    
+WdiServiceHost                            Diagnostic Service Host                                                      
+WdiSystemHost                             Diagnostic System Host                                                       
+TrkWks                                    Distributed Link Tracking Client                                             
+MSDTC                                     Distributed Transaction Coordinator                                          
+Dnscache                                  DNS Client                                                                   
+DolbyDAXAPI                               Dolby DAX API Service                                                        
+MapsBroker                                Downloaded Maps Manager                                                      
+EasyAntiCheat_EOS                         Easy Anti-Cheat (Epic Online Services)                                       
+EFS                                       Encrypting File System (EFS)                                                 
+EntAppSvc                                 Enterprise App Management Service                                            
+EapHost                                   Extensible Authentication Protocol                                           
+fhsvc                                     File History Service                                                         
+FileSyncHelper                            FileSyncHelper                                                               
+fdPHost                                   Function Discovery Provider Host                                             
+FDResPub                                  Function Discovery Resource Publication                                      
+GameInputRedistService                    GameInput Redist Service                                                     
+GameInputSvc                              GameInput Service                                                            
+GameSDK Service                           GameSDK Service                                                              
+GamingServicesNet                         Gaming Services                                                              
+GamingServices                            Gaming Services                                                              
+lfsvc                                     Geolocation Service                                                          
+GraphicsPerfSvc                           GraphicsPerfSvc                                                              
+gpsvc                                     Group Policy Client                                                          
+hpatchmon                                 Hotpatch Monitoring Service                                                  
+hidserv                                   Human Interface Device Service                                               
+HvHost                                    HV Host Service                                                              
+vmickvpexchange                           Hyper-V Data Exchange Service                                                
+vmicguestinterface                        Hyper-V Guest Service Interface                                              
+vmicshutdown                              Hyper-V Guest Shutdown Service                                               
+vmicheartbeat                             Hyper-V Heartbeat Service                                                    
+vmicvmsession                             Hyper-V PowerShell Direct Service                                            
+vmictimesync                              Hyper-V Time Synchronization Service                                         
+vmicvss                                   Hyper-V Volume Shadow Copy Requestor                                         
+IKEEXT                                    IKE and AuthIP IPsec Keying Modules                                          
+embeddedmode                              Innebygd modus                                                               
+InstallService                            Installeringstjeneste for Microsoft Store                                    
+IntelAudioService                         Intel(R) Audio Service                                                       
+IntelDisplayUMService                     Intel(R) Graphics Display Service                                            
+ipfsvc                                    Intel(R) Innovation Platform Framework Service                               
+WMIRegistrationService                    Intel(R) Management Engine WMI Provider Registration                         
+Intel(R) Platform License Manager Service Intel(R) Platform License Manager Service                                    
+IntelGraphicsSoftwareService              Intel® Graphics Software                                                     
+PIEServiceNew                             Intel® PROSet/Wireless Service                                               
+SharedAccess                              Internet Connection Sharing (ICS)                                            
+iphlpsvc                                  IP Helper                                                                    
+PolicyAgent                               IPsec Policy Agent                                                           
+LocalKdc                                  Kerberos 2 lokalt nøkkeldistribusjonssenter                                  
+autotimesvc                               Klokkeslett fra mobilt nettverk                                              
+PrintDeviceConfigurationService           Konfigurasjonstjeneste for utskriftsenhet                                    
+KtmRm                                     KtmRm for Distributed Transaction Coordinator                                
+lltdsvc                                   Link-Layer Topology Discovery Mapper                                         
+LSM                                       Local Session Manager                                                        
+logi_lamparray_service                    Logitech LampArray Service                                                   
+McpManagementService                      McpManagementService                                                         
+MessagingService_cf068                    MessagingService_cf068                                                       
+wuqisvc                                   Microsoft – bruk og kvalitetsinnsikt                                         
+wlidsvc                                   Microsoft Account Sign-in Assistant                                          
+WdNisSvc                                  Microsoft Defender Antivirus nettverksinspeksjonstjeneste                    
+WinDefend                                 Microsoft Defender Antivirus-tjeneste                                        
+MDCoreSvc                                 Microsoft Defender Core Service                                              
+edgeupdate                                Microsoft Edge Update Service (edgeupdate)                                   
+edgeupdatem                               Microsoft Edge Update Service (edgeupdatem)                                  
+MSiSCSI                                   Microsoft iSCSI Initiator Service                                            
+ClickToRunSvc                             Microsoft Office Click-to-Run Service                                        
+NgcSvc                                    Microsoft Passport                                                           
+NgcCtnrSvc                                Microsoft Passport Container                                                 
+swprv                                     Microsoft Software Shadow Copy Provider                                      
+smphost                                   Microsoft Storage Spaces SMP                                                 
+MozillaMaintenance                        Mozilla Maintenance Service                                                  
+NaturalAuthentication                     Natural Authentication                                                       
+Netlogon                                  Netlogon                                                                     
+TokenBroker                               Nettkontoadministrator                                                       
+NcdAutoSetup                              Network Connected Devices Auto-Setup                                         
+NcbService                                Network Connection Broker                                                    
+Netman                                    Network Connections                                                          
+NcaSvc                                    Network Connectivity Assistant                                               
+netprofm                                  Network List Service                                                         
+NlaSvc                                    Network Location Awareness                                                   
+NetSetupSvc                               Network Setup Service                                                        
+nsi                                       Network Store Interface Service                                              
+nvagent                                   Network Virtualization Service                                               
+NVDisplay.ContainerLocalSystem            NVIDIA Display Container LS                                                  
+FvSvc                                     NVIDIA FrameView SDK service                                                 
+NvContainerLocalSystem                    NVIDIA LocalSystem Container                                                 
+OneDrive Updater Service                  OneDrive Updater Service                                                     
+ssh-agent                                 OpenSSH Authentication Agent                                                 
+UsoSvc                                    Oppdater Orchestrator-tjeneste                                               
+defragsvc                                 Optimize drives                                                              
+P9RdrService_cf068                        P9RdrService_cf068                                                           
+PenService_cf068                          PenService_cf068                                                             
+PerfHost                                  Performance Counter DLL Host                                                 
+pla                                       Performance Logs & Alerts                                                    
+PhoneSvc                                  Phone Service                                                                
+CDPUserSvc_cf068                          Plattformbrukertjeneste for tilkoblede enheter_cf068                         
+CDPSvc                                    Plattformtjeneste for tilkoblede enheter                                     
+PlugPlay                                  Plug and Play                                                                
+WPDBusEnum                                Portable Device Enumerator Service                                           
+Power                                     Power                                                                        
+Spooler                                   Print Spooler                                                                
+PrintNotify                               Printer Extensions and Notifications                                         
+PrintScanBrokerService                    PrintScanBrokerService                                                       
+PrintWorkflowUserSvc_cf068                PrintWorkflow_cf068                                                          
+wercplsupport                             Problem Reports Control Panel Support                                        
+PcaSvc                                    Program Compatibility Assistant Service                                      
+ApxSvc                                    Proxy-tjeneste for Windows Virtual Audio Device                              
+QWAVE                                     Quality Windows Audio Video Experience                                       
+RmSvc                                     Radiobehandlingstjeneste                                                     
+RtkAudioUniversalService                  Realtek Audio Universal Service                                              
+RasAuto                                   Remote Access Auto Connection Manager                                        
+RasMan                                    Remote Access Connection Manager                                             
+SessionEnv                                Remote Desktop Configuration                                                 
+TermService                               Remote Desktop Services                                                      
+UmRdpService                              Remote Desktop Services UserMode Port Redirector                             
+RpcSs                                     Remote Procedure Call (RPC)                                                  
+RpcLocator                                Remote Procedure Call (RPC) Locator                                          
+RemoteRegistry                            Remote Registry                                                              
+ROG Live Service                          ROG Live Service                                                             
+RemoteAccess                              Routing and Remote Access                                                    
+RpcEptMapper                              RPC Endpoint Mapper                                                          
+dmwappushservice                          Rutetjeneste for push-melding via Wireless Application Protocol (WAP) og e...
+seclogon                                  Secondary Logon                                                              
+SstpSvc                                   Secure Socket Tunneling Protocol Service                                     
+SamSs                                     Security Accounts Manager                                                    
+SensorDataService                         Sensor Data Service                                                          
+SensrSvc                                  Sensor Monitoring Service                                                    
+SensorService                             Sensor Service                                                               
+LanmanServer                              Server                                                                       
+FrameServer                               Server for Windows Kamera-bilder                                             
+shpamsvc                                  Shared PC Account Manager                                                    
+ShellHWDetection                          Shell Hardware Detection                                                     
+wscsvc                                    Sikkerhetssenter                                                             
+DisplayEnhancementService                 Skjermforbedringstjeneste                                                    
+SCardSvr                                  Smart Card                                                                   
+ScDeviceEnum                              Smart Card Device Enumeration Service                                        
+SCPolicySvc                               Smart Card Removal Policy                                                    
+SmsRouter                                 SMS-rutertjeneste for Microsoft Windows                                      
+SNMPTrap                                  SNMP Trap                                                                    
+sppsvc                                    Software Protection                                                          
+WpcMonSvc                                 Sperrefunksjoner                                                             
+BcastDVRUserService_cf068                 Spill-DVR og Brukertjeneste for sending_cf068                                
+svsvc                                     Spot Verifier                                                                
+LxpSvc                                    Språkopplevelsestjeneste                                                     
+SSDPSRV                                   SSDP Discovery                                                               
+StateRepository                           State Repository Service                                                     
+Steam Client Service                      Steam Client Service                                                         
+WiaRpc                                    Still Image Acquisition Events                                               
+StorSvc                                   Storage Service                                                              
+TieringEngineService                      Storage Tiers Management                                                     
+OneSyncSvc_cf068                          Synkroniseringsvert_cf068                                                    
+SysMain                                   SysMain                                                                      
+SENS                                      System Event Notification Service                                            
+SystemEventsBroker                        System Events Broker                                                         
+WpnService                                Systemtjenesten Windows Push Notification                                    
+Schedule                                  Task Scheduler                                                               
+lmhosts                                   TCP/IP NetBIOS Helper                                                        
+TapiSrv                                   Telephony                                                                    
+TextInputManagementService                Text Input Management Service                                                
+Themes                                    Themes                                                                       
+TimeBrokerSvc                             Time Broker                                                                  
+McmSvc                                    Tjeneste for administrasjon av mobil tilkobling                              
+BTAGService                               Tjeneste for gateway for Bluetooth-lyd                                       
+IpxlatCfgSvc                              Tjeneste for konfigurasjon av IT-oversetting                                 
+icssvc                                    Tjeneste for mobil trådløssone for Windows                                   
+refsdedupsvc                              Tjeneste for ReFS-deduplisering                                              
+CloudBackupRestoreSvc_cf068               Tjeneste for sikkerhetskopiering og gjenoppretting av skyen_cf068            
+WFDSConMgrSvc                             Tjeneste for tilkoblingsbehandling for Wi-Fi Direct Services                 
+DmEnrollmentSvc                           Tjenesten for administrasjon av registrering av enheten                      
+RetailDemo                                Tjenesten for forhandlerdemo                                                 
+NetTcpPortSharing                         Tjenesten Net.Tcp Port Sharing                                               
+SecurityHealthService                     Tjenesten Windows Sikkerhet                                                  
+NPSMSvc_cf068                             Tjenesten øktbehandling for avspilling_cf068                                 
+UdkUserSvc_cf068                          Udk-brukertjeneste_cf068                                                     
+upnphost                                  UPnP Device Host                                                             
+UserDataSvc_cf068                         User Data Access_cf068                                                       
+UnistoreSvc_cf068                         User Data Storage_cf068                                                      
+UserManager                               User Manager                                                                 
+ProfSvc                                   User Profile Service                                                         
+vmcompute                                 Vertsbehandlingstjeneste for Hyper-V                                         
+hns                                       Vertsnettverkstjeneste                                                       
+vgc                                       vgc                                                                          
+vds                                       Virtual Disk                                                                 
+vmicrdv                                   Virtualiseringstjeneste for Eksternt skrivebord for Hyper-V                  
+DispBrokerDesktopSvc                      Vis policytjeneste                                                           
+VSInstallerElevationService               Visual Studio Installer Elevation Service                                    
+VSStandardCollectorService150             Visual Studio Standard Collector Service 150                                 
+VSS                                       Volume Shadow Copy                                                           
+InventorySvc                              Vurderingstjeneste for beholdning og kompatibilitet                          
+WalletService                             WalletService                                                                
+WarpJITSvc                                Warp JIT Service                                                             
+webthreatdefsvc                           Web Threat Defense-tjeneste                                                  
+WebClient                                 WebClient                                                                    
+Audiosrv                                  Windows Audio                                                                
+AudioEndpointBuilder                      Windows Audio Endpoint Builder                                               
+WbioSrvc                                  Windows Biometric Service                                                    
+wcncsvc                                   Windows Connect Now - Config Registrar                                       
+Wcmsvc                                    Windows Connection Manager                                                   
+mpssvc                                    Windows Defender Firewall                                                    
+WEPHOSTSVC                                Windows Encryption Provider Host Service                                     
+WerSvc                                    Windows Error Reporting Service                                              
+Wecsvc                                    Windows Event Collector                                                      
+EventLog                                  Windows Event Log                                                            
+FontCache                                 Windows Font Cache Service                                                   
+StiSvc                                    Windows Image Acquisition (WIA)                                              
+wisvc                                     Windows Insider-tjeneste                                                     
+msiserver                                 Windows Installer                                                            
+FrameServerMonitor                        Windows Kamera ramme server skjerm                                           
+LicenseManager                            Windows License Manager Service                                              
+Winmgmt                                   Windows Management Instrumentation                                           
+WManSvc                                   Windows Management-tjeneste                                                  
+midisrv                                   Windows MIDI Service                                                         
+TrustedInstaller                          Windows Modules Installer                                                    
+perceptionsimulation                      Windows Perception Simulation Service                                        
+FontCache3.0.0.0                          Windows Presentation Foundation Font Cache 3.0.0.0                           
+WpnUserService_cf068                      Windows Push Notifications User Service_cf068                                
+PushToInstall                             Windows PushToInstall-tjeneste                                               
+WinRM                                     Windows Remote Management (WS-Management)                                    
+WSearch                                   Windows Search                                                               
+SDRSVC                                    Windows Sikkerhetskopiering                                                  
+W32Time                                   Windows Time                                                                 
+wuauserv                                  Windows Update                                                               
+whesvc                                    Windows-tilstand og optimaliserte opplevelser                                
+WinHttpAutoProxySvc                       WinHTTP Web Proxy Auto-Discovery Service                                     
+dot3svc                                   Wired AutoConfig                                                             
+WlanSvc                                   WLAN AutoConfig                                                              
+wmiApSrv                                  WMI Performance Adapter                                                      
+LanmanWorkstation                         Workstation                                                                  
+WSAIFabricSvc                             WSAIFabricSvc                                                                
+WSLService                                WSL Service                                                                  
+WwanSvc                                   WWAN AutoConfig                                                              
+WaaSMedicSvc                              WaaSMedicSvc                                                                 
+XboxGipSvc                                Xbox Accessory Management Service                                            
+XblAuthManager                            Xbox Live godkjenningsbehandling                                             
+XboxNetApiSvc                             Xbox Live nettverkstjeneste                                                  
+XblGameSave                               Xbox Live spillagring                                                        
+zksvc                                     Zakynthos Service                                                            
+
+
+
