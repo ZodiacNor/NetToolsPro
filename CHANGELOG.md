@@ -2,6 +2,57 @@
 
 All notable changes to NetTools Pro are documented here.
 
+## [Unreleased — v1.9.0-dev] - Linux port in progress
+
+### Added
+- **Linux bootstrap** — `install.sh` installs system packages (apt), creates `.venv`, and installs `requirements.txt` in one command; supports Ubuntu 22.04+ / Debian 12+
+- `INSTALL-LINUX.md` — concise installation guide for Linux
+- `BaseToolFrame._safe_after()` — thread-safe wrapper around `self.after()` that silently drops scheduling errors (`RuntimeError`, `TclError`) when a widget is destroyed or the event loop is not yet running
+
+### Fixed
+- **Linux startup crash: `main thread is not in main loop`** — `ConnectionsFrame._worker` was reading `tk.StringVar.get()` directly from a background thread; value is now snapshotted in the main thread before the worker starts
+- **Linux startup crash: `self.after()` from worker threads** — `InterfacesFrame`, `ConnectionsFrame`, and `ARPFrame` all auto-refresh on init, spawning threads before the Tk mainloop is fully active; all `self.after(0, ...)` calls in these workers replaced with `self._safe_after(0, ...)`
+
+### Infrastructure (platform_utils — fase 1–8)
+- `platform_utils/` package: `detect`, `net`, `shell`, `scripting`, `capabilities`, `parsers/linux`, `parsers/windows`
+- `system_backend.py`: `SystemBackend` ABC, `WindowsBackend` (full), `LinuxBackend` (diagnostics only — fase 8)
+- Linux network wrappers: `ip addr`, `ip neigh`, `ip -4 route show default`, `ss -anop`
+- `build.bat` patched with `py -3` launcher strategy and pip retry loop
+
+## [1.9.0] - 2026-04-22
+
+### Added
+- Netdiscover backend in `platform_utils/net.py`
+- Netdiscover GUI via `NetdiscoverFrame`
+- Linux bootstrap script `install.sh`
+- Linux installation guide `INSTALL-LINUX.md`
+- Linux diagnostics in `LinuxBackend`
+
+### Changed
+- `SystemToolsFrame` refactored to backend-driven architecture
+- `nettools.py` reduced by moving direct PowerShell/SFC/DISM handling into `system_backend.py`
+- `build.bat` improved with Python detection and pip retry handling
+
+### Fixed
+- Thread-safety issue for Tkinter updates from worker threads
+- Startup flicker where the app visually switched through tabs before landing on Dashboard
+- Missing `traceroute` binary now handled with explicit user-facing Linux error
+- Linux live capture raw socket path corrected for platform-specific socket behavior
+
+### Linux
+- ARP parsing via `ip neigh`
+- Default gateway parsing via `ip route`
+- `LinuxBackend` added with diagnostics support
+- Netdiscover integrated as a Linux-only feature
+- Conditional rendering for unsupported platform features
+
+### Technical
+- Backend owns commands, GUI owns control flow
+- Generator-based backend streams with `yield`
+- JSON streaming for netdiscover device data
+- `_safe_after()` added for thread-safe UI updates
+- `install.sh` handles system dependencies and virtual environment setup
+
 ## [1.8.1] - 2026-03-26
 
 ### Changed

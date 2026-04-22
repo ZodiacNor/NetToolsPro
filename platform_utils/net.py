@@ -6,6 +6,7 @@ Phase 2 (this file): Windows branch fully implemented.
 Phase 7:             Linux branch implementation (currently raises NotImplementedError
                      or returns empty results).
 """
+import shutil
 import subprocess
 from .detect import IS_WINDOWS, IS_LINUX, SUBPROCESS_FLAGS
 from .parsers import windows as _win
@@ -77,7 +78,12 @@ def traceroute_command(target: str, max_hops: int = 30,
         cmd += ["-h", str(max_hops), "-w", str(timeout_ms), target]
         return cmd
     # Linux
-    cmd = ["traceroute"]
+    traceroute_bin = shutil.which("traceroute")
+    if not traceroute_bin:
+        raise FileNotFoundError(
+            "Traceroute is not installed on Linux. Install the 'traceroute' package and try again."
+        )
+    cmd = [traceroute_bin]
     if not resolve:
         cmd.append("-n")
     cmd += ["-m", str(max_hops), "-w", str(max(1, timeout_ms // 1000)), target]
@@ -95,6 +101,19 @@ def ipconfig_command() -> list:
     return ["ip", "addr"]
 
 
+def interface_details():
+    """Return normalized Linux interface details, or None on other platforms."""
+    if not IS_LINUX:
+        return None
+    try:
+        out = subprocess.check_output(
+            ["ip", "addr"], text=True, timeout=5, stderr=subprocess.DEVNULL,
+        )
+        return _lin.parse_ip_addr(out)
+    except Exception:
+        return []
+
+
 # ── Active connections / netstat ──────────────────────────────────────────────
 
 def netstat_command() -> list:
@@ -102,6 +121,19 @@ def netstat_command() -> list:
     if IS_WINDOWS:
         return ["netstat", "-ano"]
     return ["ss", "-anop"]
+
+
+def connection_details():
+    """Return normalized Linux connection details, or None on other platforms."""
+    if not IS_LINUX:
+        return None
+    try:
+        out = subprocess.check_output(
+            ["ss", "-anop"], text=True, timeout=8, stderr=subprocess.DEVNULL,
+        )
+        return _lin.parse_ss_anop(out)
+    except Exception:
+        return []
 
 
 # ── ARP ───────────────────────────────────────────────────────────────────────
@@ -181,3 +213,146 @@ def default_gateway_output() -> str:
         )
     except Exception:
         return ""
+
+
+# ── Netdiscover (Linux) ───────────────────────────────────────────────────────
+
+def netdiscover_available() -> bool:
+    """Returner True hvis netdiscover-binæren er installert og tilgjengelig i PATH."""
+    return shutil.which("netdiscover") is not None
+
+
+def netdiscover_binary() -> str | None:
+    """Returner full sti til netdiscover-binæren, eller None."""
+    return shutil.which("netdiscover")
+
+
+def netdiscover_scan(interface: str | None = None,
+                     cidr: str | None = None,
+                     passive: bool = False,
+                     timeout_s: int = 60):
+    """Kjør netdiscover i passiv eller aktiv modus og yield rå linjer.
+
+    Yielder strenger — én per output-linje fra netdiscover. Oppringer er ansvarlig
+    for å parse linjene via parse_netdiscover_line().
+
+    Denne funksjonen krever root eller CAP_NET_RAW + CAP_NET_ADMIN. Feil
+    håndteres ved at funksjonen kaster PermissionError / FileNotFoundError /
+    subprocess.CalledProcessError oppover — caller (backend) transformerer til
+    brukervennlig melding.
+
+    Args:
+        interface: f.eks. "enp3s0". None → netdiscover auto-velger.
+        cidr: f.eks. "192.168.1.0/24". None → netdiscover auto-oppdager.
+        passive: True = -p (passiv lytting), False = aktiv scan.
+        timeout_s: hard timeout før prosess dreps.
+
+    Raises:
+        FileNotFoundError: netdiscover ikke installert.
+        PermissionError: manglende capabilities/root.
+        subprocess.TimeoutExpired: hvis timeout nås og prosess ikke avsluttes rent.
+    """
+    binary = netdiscover_binary()
+    if not binary:
+        raise FileNotFoundError(
+            "netdiscover er ikke installert. Kjør: sudo apt install netdiscover"
+        )
+
+    cmd = [binary, "-N", "-P", "-L"]
+    if interface:
+        cmd += ["-i", interface]
+    if cidr:
+        cmd += ["-r", cidr]
+    if passive:
+        cmd += ["-p"]
+
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
+
+    try:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            yield line.rstrip("\n")
+        proc.wait(timeout=timeout_s)
+
+        if proc.returncode != 0:
+            stderr_text = ""
+            if proc.stderr:
+                stderr_text = proc.stderr.read() or ""
+            if "root" in stderr_text.lower() or "permission" in stderr_text.lower():
+                raise PermissionError(
+                    "netdiscover krever root eller CAP_NET_RAW + CAP_NET_ADMIN. "
+                    "Kjør via pkexec eller sett capabilities med: "
+                    "sudo setcap cap_net_raw,cap_net_admin+eip $(which netdiscover)"
+                )
+            raise subprocess.CalledProcessError(
+                proc.returncode, cmd, output="", stderr=stderr_text
+            )
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=2)
+        raise
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
+
+def parse_netdiscover_line(line: str) -> dict | None:
+    """Parse én linje fra netdiscover -P-output til dict, eller None hvis ikke-data.
+
+    Netdiscover -P-format (fixed-width, kan variere med versjon):
+        192.168.1.1     aa:bb:cc:dd:ee:ff      1      60  Some Vendor Name, Inc
+        ----------      -----------------      -      --  ---------------------
+        IP              MAC                  Count  Len  Vendor
+
+    Header- og separatorlinjer returnerer None.
+
+    Returns:
+        dict med nøkler: ip, mac, count, length, vendor
+        eller None hvis linjen ikke er en data-linje.
+    """
+    line = line.strip()
+    if not line:
+        return None
+    if line.startswith("-") or line.startswith("_"):
+        return None
+    if line.lower().startswith("currently scanning") or "scan complete" in line.lower():
+        return None
+    if "ip " in line.lower() and "mac " in line.lower() and "vendor" in line.lower():
+        return None
+
+    parts = line.split(None, 4)
+    if len(parts) < 4:
+        return None
+
+    ip = parts[0]
+    mac = parts[1]
+    if ip.count(".") != 3:
+        return None
+    if mac.count(":") != 5:
+        return None
+
+    try:
+        count = int(parts[2])
+        length = int(parts[3])
+    except (ValueError, IndexError):
+        return None
+
+    vendor = parts[4].strip() if len(parts) >= 5 else "Unknown vendor"
+
+    return {
+        "ip": ip,
+        "mac": mac.upper(),
+        "count": count,
+        "length": length,
+        "vendor": vendor,
+    }

@@ -8,14 +8,31 @@ Generator-baserte streaming-metoder yielder (linje, tag)-tupler.
 Framen konsumerer generatoren og kaller self.q(line, tag) per element.
 """
 
-import subprocess
+import os
 import re
-import json
+import shutil
+import socket
+import struct
+import subprocess
+import time
 from abc import ABC, abstractmethod
+from pathlib import Path
 from threading import Event
 from typing import Iterator, Tuple
 
 from platform_utils import SUBPROCESS_FLAGS, IS_WINDOWS, IS_LINUX
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - not available on Windows
+    fcntl = None
+
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    psutil = None
+    PSUTIL_AVAILABLE = False
 
 # (linje_tekst, tag) der tag ∈ {"header", "normal", "info", "success", "warning", "error", "dim"}
 OutputLine = Tuple[str, str]
@@ -168,7 +185,7 @@ class SystemBackend(ABC):
     @abstractmethod
     def available_tools(self) -> set:
         """Returnerer set av verktøy-navn som er støttet på denne plattformen.
-        Navn: 'diagnostics', 'sfc', 'dism', 'backup', 'restore', 'debloat'."""
+        Navn: 'diagnostics', 'sfc', 'dism', 'backup', 'restore', 'debloat', 'netdiscover'."""
 
     @abstractmethod
     def admin_required_for(self, tool: str) -> bool:
@@ -201,6 +218,11 @@ class SystemBackend(ABC):
         """Setter oppstartstype for én service.
         Returnerer (success, display_line).
         dry=True returnerer preview-linje uten å kjøre kommandoen."""
+
+    @abstractmethod
+    def run_netdiscover(self, stop_event: Event, **kwargs) -> Iterator[OutputLine]:
+        """Kjør netdiscover-scan (kun støttet på Linux).
+        Yielder (linje, tag)-tupler der tag='data' betyr JSON-serialisert enhet."""
 
 
 # ── Windows-implementasjon ────────────────────────────────────────────────────
@@ -305,35 +327,608 @@ class WindowsBackend(SystemBackend):
         line = res.stdout.strip() or res.stderr.strip()
         return line.startswith("OK:"), line
 
+    def run_netdiscover(self, stop_event: Event, **kwargs) -> Iterator[OutputLine]:
+        """Netdiscover er Linux-only. Frame skal ikke kalle denne på Windows
+        (SystemToolsFrame's conditional rendering filtrerer basert på available_tools())."""
+        raise NotImplementedError("Netdiscover er ikke tilgjengelig på Windows")
+        yield  # pragma: no cover - needed to make this a generator
+
 
 # ── Linux-stub ────────────────────────────────────────────────────────────────
 
 class LinuxBackend(SystemBackend):
-    """Linux-stub — full implementasjon i Fase 8."""
+    """Read-only Linux diagnostics backend for SystemToolsFrame."""
+
+    _SIOCGIFADDR = 0x8915
+
+    @staticmethod
+    def _read_os_name() -> str:
+        try:
+            with open("/etc/os-release", "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("PRETTY_NAME="):
+                        return line.split("=", 1)[1].strip().strip('"') or "Linux"
+        except OSError:
+            pass
+        return "Linux"
+
+    @staticmethod
+    def _run_command(cmd: list[str], timeout: float = 5.0) -> tuple[str | None, str | None]:
+        try:
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                creationflags=SUBPROCESS_FLAGS,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return None, "timed out"
+        except OSError as e:
+            return None, str(e)
+        if res.returncode != 0:
+            detail = res.stderr.strip() or res.stdout.strip() or f"exit {res.returncode}"
+            return None, detail
+        return res.stdout.strip(), None
+
+    @staticmethod
+    def _abort(stop_event: Event) -> tuple[bool, OutputLine | None]:
+        if stop_event.is_set():
+            return True, ("Diagnostics aborted.", "error")
+        return False, None
+
+    @staticmethod
+    def _format_bytes(value: int | float | None) -> str:
+        if value is None:
+            return "n/a"
+        size = float(value)
+        for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+            if abs(size) < 1024.0 or unit == "TiB":
+                if unit == "B":
+                    return f"{int(size)} {unit}"
+                return f"{size:.1f} {unit}"
+            size /= 1024.0
+        return f"{size:.1f} TiB"
+
+    @staticmethod
+    def _read_first_line(path: str) -> str:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.readline().strip()
+        except OSError:
+            return ""
+
+    @staticmethod
+    def _read_load_average() -> str:
+        try:
+            one, five, fifteen = os.getloadavg()
+            return f"{one:.2f} {five:.2f} {fifteen:.2f}"
+        except (OSError, AttributeError):
+            line = LinuxBackend._read_first_line("/proc/loadavg")
+            return " ".join(line.split()[:3]) if line else ""
+
+    @staticmethod
+    def _parse_key_value_output(output: str) -> dict[str, str]:
+        values: dict[str, str] = {}
+        for line in output.splitlines():
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            values[key.strip()] = value.strip()
+        return values
+
+    @staticmethod
+    def _cpu_snapshot() -> dict[str, str | int | float | None]:
+        model = ""
+        logical = None
+        physical = None
+        usage = None
+
+        output, error = LinuxBackend._run_command(["lscpu"])
+        if output:
+            values = LinuxBackend._parse_key_value_output(output)
+            model = values.get("Model name", "")
+            try:
+                logical = int(values.get("CPU(s)", "") or 0) or None
+            except ValueError:
+                logical = None
+            sockets = values.get("Socket(s)", "1")
+            cores_per_socket = values.get("Core(s) per socket", "")
+            try:
+                sockets_i = int(sockets or 1)
+                cores_i = int(cores_per_socket or 0)
+                physical = sockets_i * cores_i if cores_i else None
+            except ValueError:
+                physical = None
+        elif error:
+            model = ""
+
+        if not model:
+            try:
+                with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.startswith("model name"):
+                            model = line.split(":", 1)[1].strip()
+                            break
+            except OSError:
+                pass
+
+        if PSUTIL_AVAILABLE:
+            try:
+                logical = logical or psutil.cpu_count(logical=True)
+                physical = physical or psutil.cpu_count(logical=False)
+                usage = psutil.cpu_percent(interval=0.15)
+            except Exception:
+                pass
+
+        return {
+            "model": model or "Unknown CPU",
+            "logical": logical,
+            "physical": physical,
+            "load": LinuxBackend._read_load_average(),
+            "usage": usage,
+        }
+
+    @staticmethod
+    def _memory_lines() -> list[OutputLine]:
+        if PSUTIL_AVAILABLE:
+            try:
+                vm = psutil.virtual_memory()
+                swap = psutil.swap_memory()
+                return [
+                    (f"Total: {LinuxBackend._format_bytes(vm.total)}", "info"),
+                    (
+                        f"Used: {LinuxBackend._format_bytes(vm.used)} ({vm.percent:.1f}%)"
+                        f"  Available: {LinuxBackend._format_bytes(vm.available)}",
+                        "info",
+                    ),
+                    (
+                        f"Swap: {LinuxBackend._format_bytes(swap.used)} / "
+                        f"{LinuxBackend._format_bytes(swap.total)} ({swap.percent:.1f}%)",
+                        "info",
+                    ),
+                ]
+            except Exception as e:
+                return [(f"psutil memory snapshot failed ({e})", "warning")]
+
+        output, error = LinuxBackend._run_command(["free", "-h"])
+        if error:
+            return [(f"Command failed: free -h ({error})", "error")]
+        return [(line.strip(), "info") for line in output.splitlines() if line.strip()]
+
+    @staticmethod
+    def _disk_lines() -> list[OutputLine]:
+        lines: list[OutputLine] = []
+        shown_mounts: set[str] = set()
+
+        if PSUTIL_AVAILABLE:
+            try:
+                partitions = psutil.disk_partitions(all=False)
+                root_part = next((p for p in partitions if p.mountpoint == "/"), None)
+                if root_part:
+                    usage = psutil.disk_usage(root_part.mountpoint)
+                    lines.append(
+                        (
+                            f"/ ({root_part.fstype or 'unknown'}): "
+                            f"{LinuxBackend._format_bytes(usage.used)} / "
+                            f"{LinuxBackend._format_bytes(usage.total)} used "
+                            f"({usage.percent:.1f}%)",
+                            "info",
+                        )
+                    )
+                    shown_mounts.add("/")
+
+                for part in partitions:
+                    if part.mountpoint in shown_mounts:
+                        continue
+                    if part.mountpoint.startswith("/snap"):
+                        continue
+                    if part.mountpoint not in {"/home", "/boot", "/boot/efi", "/tmp"}:
+                        continue
+                    try:
+                        usage = psutil.disk_usage(part.mountpoint)
+                    except Exception:
+                        continue
+                    lines.append(
+                        (
+                            f"{part.mountpoint} ({part.fstype or 'unknown'}): "
+                            f"{LinuxBackend._format_bytes(usage.used)} / "
+                            f"{LinuxBackend._format_bytes(usage.total)} used "
+                            f"({usage.percent:.1f}%)",
+                            "info",
+                        )
+                    )
+                    shown_mounts.add(part.mountpoint)
+            except Exception as e:
+                lines.append((f"psutil disk snapshot failed ({e})", "warning"))
+
+        if not lines:
+            output, error = LinuxBackend._run_command(["df", "-h", "/"])
+            if error:
+                lines.append((f"Command failed: df -h / ({error})", "error"))
+            else:
+                for line in output.splitlines():
+                    if line.strip():
+                        lines.append((line.strip(), "info"))
+            fstype, fs_error = LinuxBackend._run_command(["findmnt", "-no", "FSTYPE", "/"])
+            if fstype:
+                lines.append((f"Root filesystem type: {fstype}", "info"))
+            elif fs_error:
+                lines.append((f"Root filesystem type unavailable ({fs_error})", "dim"))
+        return lines
+
+    @staticmethod
+    def _default_gateway() -> tuple[str, str]:
+        try:
+            with open("/proc/net/route", "r", encoding="utf-8") as f:
+                next(f, None)
+                for line in f:
+                    fields = line.strip().split()
+                    if len(fields) < 4:
+                        continue
+                    if fields[1] != "00000000":
+                        continue
+                    gateway = socket.inet_ntoa(struct.pack("<L", int(fields[2], 16)))
+                    return fields[0], gateway
+        except (OSError, ValueError, struct.error):
+            pass
+        return "", ""
+
+    @staticmethod
+    def _interface_ipv4(name: str) -> list[str]:
+        ipv4s: list[str] = []
+        if PSUTIL_AVAILABLE:
+            try:
+                addrs = psutil.net_if_addrs()
+                for addr in addrs.get(name, []):
+                    family = getattr(addr, "family", None)
+                    if family == socket.AF_INET and getattr(addr, "address", ""):
+                        ipv4s.append(addr.address)
+                if ipv4s:
+                    return ipv4s
+            except Exception:
+                pass
+
+        if fcntl is None:
+            return ipv4s
+
+        sock = None
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            ifreq = struct.pack("256s", name[:15].encode("utf-8"))
+            result = fcntl.ioctl(sock.fileno(), LinuxBackend._SIOCGIFADDR, ifreq)
+            ipv4s.append(socket.inet_ntoa(result[20:24]))
+        except Exception:
+            pass
+        finally:
+            if sock is not None:
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+        return ipv4s
+
+    @staticmethod
+    def _network_lines() -> list[OutputLine]:
+        lines: list[OutputLine] = []
+        try:
+            interfaces = sorted(Path("/sys/class/net").iterdir(), key=lambda p: p.name)
+        except OSError as e:
+            return [(f"Interface listing unavailable ({e})", "warning")]
+
+        active_count = 0
+        for iface in interfaces:
+            if iface.name == "lo":
+                continue
+            state = LinuxBackend._read_first_line(str(iface / "operstate")) or "unknown"
+            ipv4s = LinuxBackend._interface_ipv4(iface.name)
+            if state == "up" or ipv4s:
+                active_count += 1
+                lines.append(
+                    (
+                        f"{iface.name}: state={state}"
+                        f"{'  IPv4=' + ', '.join(ipv4s) if ipv4s else '  IPv4=unavailable'}",
+                        "info",
+                    )
+                )
+
+        if active_count == 0:
+            lines.append(("No active non-loopback interfaces detected.", "warning"))
+
+        gw_iface, gateway = LinuxBackend._default_gateway()
+        if gateway:
+            lines.append((f"Default gateway: {gateway} via {gw_iface}", "info"))
+        else:
+            lines.append(("Default gateway unavailable.", "dim"))
+
+        established = 0
+        if PSUTIL_AVAILABLE:
+            try:
+                conns = psutil.net_connections(kind="inet")
+                established = sum(1 for c in conns if getattr(c, "status", "") == "ESTABLISHED")
+            except Exception:
+                established = 0
+        if not established:
+            for path in ("/proc/net/tcp", "/proc/net/tcp6"):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        next(f, None)
+                        established += sum(1 for line in f if line.split()[3] == "01")
+                except Exception:
+                    pass
+        lines.append((f"Established connections: {established}", "info"))
+        return lines
+
+    @staticmethod
+    def _process_lines() -> list[OutputLine]:
+        if not PSUTIL_AVAILABLE:
+            return [("psutil unavailable — process snapshot skipped.", "dim")]
+
+        try:
+            proc_count = len(psutil.pids())
+            processes = []
+            for proc in psutil.process_iter(["pid", "name", "memory_percent"]):
+                try:
+                    proc.cpu_percent(None)
+                    processes.append(proc)
+                except Exception:
+                    continue
+            time.sleep(0.1)
+
+            rows = []
+            for proc in processes:
+                try:
+                    info = proc.info
+                    rows.append({
+                        "pid": info.get("pid"),
+                        "name": info.get("name") or "?",
+                        "memory_percent": float(info.get("memory_percent") or 0.0),
+                        "cpu_percent": proc.cpu_percent(None),
+                    })
+                except Exception:
+                    continue
+
+            rows.sort(key=lambda item: (item["cpu_percent"], item["memory_percent"]), reverse=True)
+            if not rows:
+                rows.sort(key=lambda item: item["memory_percent"], reverse=True)
+
+            lines: list[OutputLine] = [(f"Total processes: {proc_count}", "info")]
+            for item in rows[:5]:
+                lines.append(
+                    (
+                        f"PID {item['pid']:<6} {item['name'][:24]:<24} "
+                        f"CPU {item['cpu_percent']:>5.1f}%  MEM {item['memory_percent']:>5.1f}%",
+                        "info",
+                    )
+                )
+            return lines
+        except Exception as e:
+            return [(f"Process snapshot failed ({e})", "warning")]
+
+    @staticmethod
+    def _temperature_lines() -> list[OutputLine]:
+        if PSUTIL_AVAILABLE:
+            try:
+                temps = psutil.sensors_temperatures(fahrenheit=False)
+                lines: list[OutputLine] = []
+                for sensor_name, entries in temps.items():
+                    if not entries:
+                        continue
+                    for entry in entries[:2]:
+                        label = entry.label or sensor_name
+                        current = getattr(entry, "current", None)
+                        if current is None:
+                            continue
+                        lines.append((f"{label}: {current:.1f} C", "info"))
+                    if len(lines) >= 5:
+                        break
+                if lines:
+                    return lines[:5]
+            except Exception:
+                pass
+
+        lines: list[OutputLine] = []
+        try:
+            for zone in sorted(Path("/sys/class/thermal").glob("thermal_zone*"))[:5]:
+                zone_type = LinuxBackend._read_first_line(str(zone / "type")) or zone.name
+                temp_raw = LinuxBackend._read_first_line(str(zone / "temp"))
+                if not temp_raw:
+                    continue
+                value = float(temp_raw)
+                current = value / 1000.0 if value > 1000 else value
+                lines.append((f"{zone_type}: {current:.1f} C", "info"))
+            if lines:
+                return lines
+        except OSError:
+            pass
+        return [("Temperature sensors unavailable.", "dim")]
+
+    @staticmethod
+    def _gpu_lines() -> list[OutputLine]:
+        nvidia_smi = shutil.which("nvidia-smi")
+        if not nvidia_smi:
+            return [("NVIDIA GPU telemetry unavailable.", "dim")]
+
+        output, error = LinuxBackend._run_command(
+            [
+                nvidia_smi,
+                "--query-gpu=name,temperature.gpu,memory.used,memory.total",
+                "--format=csv,noheader,nounits",
+            ],
+            timeout=4.0,
+        )
+        if error:
+            return [("NVIDIA GPU telemetry unavailable.", "dim")]
+
+        lines: list[OutputLine] = []
+        for raw_line in output.splitlines():
+            parts = [part.strip() for part in raw_line.split(",")]
+            if len(parts) != 4:
+                continue
+            name, temp, used, total = parts
+            lines.append((f"{name}: {temp} C  VRAM {used} / {total} MiB", "info"))
+        return lines or [("NVIDIA GPU telemetry unavailable.", "dim")]
+
+    def _yield_section(self, title: str, entries: list[OutputLine]) -> Iterator[OutputLine]:
+        yield (f"=== {title} ===", "header")
+        if not entries:
+            yield ("No data available.", "dim")
+        else:
+            for text, tag in entries:
+                yield (text, tag)
+        yield ("", "normal")
 
     def available_tools(self) -> set:
-        return set()
+        tools = {"diagnostics"}
+        from platform_utils import net as _pu_net
+        if _pu_net.netdiscover_available():
+            tools.add("netdiscover")
+        return tools
 
     def admin_required_for(self, tool: str) -> bool:
-        return True
+        return False
 
     def run_diagnostics(self, stop_event: Event) -> Iterator[OutputLine]:
-        raise NotImplementedError("Linux backend — implementeres i Fase 8")
-        yield  # gjør funksjonen til en generator
+        try:
+            yield ("Running Linux diagnostics...", "info")
+            sections: list[tuple[str, list[OutputLine]]] = []
+
+            hostname, hostname_error = self._run_command(["hostname"])
+            kernel, kernel_error = self._run_command(["uname", "-r"])
+            uptime, uptime_error = self._run_command(["uptime", "-p"])
+            system_lines: list[OutputLine] = [
+                (f"OS: {self._read_os_name()}", "info"),
+                (f"Hostname: {hostname.splitlines()[0].strip()}", "info") if hostname else
+                (f"Hostname unavailable ({hostname_error})", "warning"),
+                (f"Kernel: {kernel.splitlines()[0].strip()}", "info") if kernel else
+                (f"Kernel unavailable ({kernel_error})", "warning"),
+                (f"Uptime: {uptime.splitlines()[0].strip()}", "info") if uptime else
+                (f"Uptime unavailable ({uptime_error})", "warning"),
+            ]
+            sections.append(("SYSTEM", system_lines))
+
+            cpu = self._cpu_snapshot()
+            cpu_lines: list[OutputLine] = [
+                (f"Model: {cpu['model']}", "info"),
+                (
+                    f"Cores/Threads: {cpu['physical'] or 'n/a'} physical / "
+                    f"{cpu['logical'] or 'n/a'} logical",
+                    "info",
+                ),
+            ]
+            if cpu["load"]:
+                cpu_lines.append((f"Load average: {cpu['load']}", "info"))
+            if cpu["usage"] is not None:
+                cpu_lines.append((f"CPU usage: {cpu['usage']:.1f}%", "info"))
+            else:
+                cpu_lines.append(("CPU usage unavailable.", "dim"))
+            sections.append(("CPU", cpu_lines))
+
+            sections.append(("MEMORY", self._memory_lines()))
+            sections.append(("DISK", self._disk_lines()))
+            sections.append(("NETWORK", self._network_lines()))
+            sections.append(("PROCESSES", self._process_lines()))
+            sections.append(("TEMPERATURE", self._temperature_lines()))
+            sections.append(("GPU", self._gpu_lines()))
+
+            for title, entries in sections:
+                aborted, line = self._abort(stop_event)
+                if aborted:
+                    yield line
+                    return
+                yield from self._yield_section(title, entries)
+            yield ("Diagnostics complete.", "success")
+        except Exception as e:
+            yield (f"Diagnostics failed: {e}", "error")
 
     def run_sfc(self, stop_event: Event) -> Iterator[OutputLine]:
-        raise NotImplementedError("Linux backend — implementeres i Fase 8")
+        raise NotImplementedError("SFC is not supported on Linux in Phase 8")
         yield
 
     def run_dism(self, stop_event: Event) -> Iterator[OutputLine]:
-        raise NotImplementedError("Linux backend — implementeres i Fase 8")
+        raise NotImplementedError("DISM is not supported on Linux in Phase 8")
         yield
 
     def export_services(self, path: str) -> None:
-        raise NotImplementedError("Linux backend — implementeres i Fase 8")
+        raise NotImplementedError("Service backup is not supported on Linux in Phase 8")
 
     def set_service_startup(self, name: str, startup_type: str, dry: bool) -> tuple:
-        raise NotImplementedError("Linux backend — implementeres i Fase 8")
+        raise NotImplementedError("Service changes are not supported on Linux in Phase 8")
+
+    # ── Netdiscover (Linux-only) ──────────────────────────────────────────────
+
+    def run_netdiscover(self, stop_event: Event,
+                        interface: str | None = None,
+                        cidr: str | None = None,
+                        passive: bool = False) -> Iterator[OutputLine]:
+        """Kjør netdiscover og yield (linje, tag)-tupler.
+
+        Yielder både info-linjer (header, progress) og data-linjer (per enhet funnet).
+        Data-linjer serialiseres som JSON med tag 'data' så framen kan parse
+        dem og oppdatere tabell-rader. Info-linjer bruker tags 'info'/'warning'/'error'.
+        """
+        import json as _json
+        from platform_utils import net as _pu_net
+
+        if not _pu_net.netdiscover_available():
+            yield ("netdiscover er ikke installert på systemet.", "error")
+            yield ("Installer med: sudo apt install netdiscover", "info")
+            return
+
+        mode_label = "passiv" if passive else "aktiv"
+        yield (f"Starter netdiscover i {mode_label} modus...", "header")
+        if interface:
+            yield (f"Interface: {interface}", "info")
+        if cidr:
+            yield (f"Nettverk: {cidr}", "info")
+
+        found_count = 0
+        scan_iter = _pu_net.netdiscover_scan(
+            interface=interface,
+            cidr=cidr,
+            passive=passive,
+            timeout_s=120,
+        )
+        try:
+            for raw_line in scan_iter:
+                if stop_event.is_set():
+                    yield ("Scan avbrutt av bruker.", "warning")
+                    return
+
+                record = _pu_net.parse_netdiscover_line(raw_line)
+                if record is None:
+                    continue
+
+                found_count += 1
+                yield (_json.dumps(record), "data")
+
+        except FileNotFoundError as e:
+            yield (str(e), "error")
+            return
+        except PermissionError as e:
+            yield (str(e), "error")
+            yield (
+                "Tips: Bruk 'Aktiver nå'-knappen når capability-banner er implementert.",
+                "info",
+            )
+            return
+        except subprocess.TimeoutExpired:
+            yield ("Scan timeout — prosess ble terminert.", "warning")
+            return
+        except Exception as e:
+            yield (f"Uventet feil under scan: {e}", "error")
+            return
+        finally:
+            close = getattr(scan_iter, "close", None)
+            if callable(close):
+                close()
+
+        if found_count == 0:
+            yield ("Ingen enheter funnet.", "warning")
+        else:
+            yield (f"Scan fullført — {found_count} enheter funnet.", "success")
 
 
 # ── Factory ───────────────────────────────────────────────────────────────────

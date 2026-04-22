@@ -243,6 +243,9 @@ CAMERA_RTSP_PATHS = [
 
 # ==================== Camera Analysis — shared helpers ====================
 
+_LINUX_ETH_P_IP = 0x0800
+_LINUX_ETH_P_VLAN = 0x8100
+
 def _cam_tcp_open(ip, port, timeout_ms=1000):
     """TCP connect probe. Returns True if port accepts connection."""
     try:
@@ -324,6 +327,24 @@ def _parse_dhcp_from_raw(data):
         "client_ip":  ciaddr if ciaddr != "0.0.0.0" else None,
         "offered_ip": yiaddr if yiaddr != "0.0.0.0" else None,
     }
+
+
+def _capture_ipv4_packet(data):
+    """Normalize Windows/Linux raw capture bytes to an IPv4 packet buffer."""
+    if not _pu_detect.IS_LINUX:
+        return data
+    if len(data) < 14:
+        return None
+    ether_type = struct.unpack("!H", data[12:14])[0]
+    offset = 14
+    if ether_type == _LINUX_ETH_P_VLAN:
+        if len(data) < 18:
+            return None
+        ether_type = struct.unpack("!H", data[16:18])[0]
+        offset = 18
+    if ether_type != _LINUX_ETH_P_IP or len(data) <= offset:
+        return None
+    return data[offset:]
 
 
 def build_candidate_rtsp_urls(ip):
@@ -591,6 +612,7 @@ SIDEBAR_STRUCTURE = [
 
     ("category",   "\U0001f52d  Discovery",       "cat_disc",     None),
     ("tool",       "\U0001f4e1  Net Scanner",     "netscan",      "cat_disc"),
+    ("tool",       "\U0001f4e1  Netdiscover",     "netdiscover",  "cat_disc"),
     ("tool",       "\U0001f9ee  Subnet Calc",     "subnet",       "cat_disc"),
     ("tool",       "\U0001f4a1  Wake-on-LAN",     "wol",          "cat_disc"),
     ("tool",       "\U0001f4cb  ARP Table",       "arp",          "cat_disc"),
@@ -1075,6 +1097,13 @@ class BaseToolFrame(ctk.CTkFrame):
         ctk.CTkButton(dlg, text="\u2b50  Save", command=do_save,
                       fg_color="#238636", hover_color="#2ea043",
                       width=120).pack()
+
+    def _safe_after(self, ms, func):
+        """Schedule func on the main thread; silently drop if widget is gone or loop not running."""
+        try:
+            self.after(ms, func)
+        except (RuntimeError, tk.TclError):
+            pass
 
 
 # ==================== Ping Tool ====================
@@ -1964,13 +1993,14 @@ class TracerouteFrame(BaseToolFrame):
 
     def _worker(self):
         t = self.target_var.get().strip()
-        cmd = _pu_net.traceroute_command(
-            t, max_hops=self.hops_var.get(),
-            timeout_ms=self.timeout_var.get(),
-            resolve=self.resolve_var.get(),
-        )
         proc = None
+        status = "Trace complete"
         try:
+            cmd = _pu_net.traceroute_command(
+                t, max_hops=self.hops_var.get(),
+                timeout_ms=self.timeout_var.get(),
+                resolve=self.resolve_var.get(),
+            )
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                     text=True, creationflags=SUBPROCESS_FLAGS)
             for line in proc.stdout:
@@ -1990,8 +2020,16 @@ class TracerouteFrame(BaseToolFrame):
                     self.q(line, "success")
                 else:
                     self.q(line, "normal")
+        except FileNotFoundError as e:
+            self.q(str(e), "error")
+            self.q("Install it with: sudo apt install traceroute", "warning")
+            status = "Traceroute unavailable"
+        except OSError as e:
+            self.q(f"Traceroute failed to start: {e}", "error")
+            status = "Traceroute failed to start"
         except Exception as e:
             self.q(f"Error: {e}", "error")
+            status = "Traceroute error"
         finally:
             if proc is not None:
                 try:
@@ -1999,7 +2037,7 @@ class TracerouteFrame(BaseToolFrame):
                 except Exception:
                     pass
                 proc.wait()
-            SessionHistory.log("Traceroute", f"Trace {t}", "Trace complete")
+            SessionHistory.log("Traceroute", f"Trace {t}", status)
             self.after(0, self.ui_done)
 
 
@@ -2661,6 +2699,252 @@ class NetworkScanFrame(BaseToolFrame):
         return reasons
 
 
+# ==================== Netdiscover Scanner (Linux) ====================
+class NetdiscoverFrame(BaseToolFrame):
+    """Linux netdiscover frontend backed by SystemBackend."""
+
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, **kwargs)
+        self._backend = system_backend.get_backend()
+        self._supported = "netdiscover" in self._backend.available_tools()
+        self._seen_macs = set()
+        self._hosts_data = []
+        self._tree_items = {}
+        self._build()
+
+    def _build(self):
+        (self._build_full if self._supported else self._build_unsupported)()
+
+    def _build_unsupported(self):
+        self.make_header("📡  Netdiscover", "Advanced network discovery — ikke tilgjengelig på denne plattformen")
+        card = self.make_card(self)
+        card.pack(fill="x", padx=20, pady=20)
+        msg_lines = [
+            "Netdiscover er en Linux-funksjon som krever at pakken er installert.", "",
+            "På Ubuntu/Debian:", "    sudo apt install netdiscover", "",
+            "Standard Network Scanner-fanen fungerer på alle plattformer",
+            "og gir lignende enhets-deteksjon via ping + port-probing.",
+        ]
+        ctk.CTkLabel(
+            card, text="\n".join(msg_lines), text_color="#8b949e",
+            justify="left", font=ctk.CTkFont(size=11),
+        ).pack(anchor="w", padx=16, pady=16)
+
+    def _build_full(self):
+        self.make_header(
+            "📡  Netdiscover",
+            "Advanced network discovery (Linux) — deeper device visibility than standard ARP scanning",
+        )
+        top = self.make_card(self)
+        top.pack(fill="x", padx=20, pady=(0, 8))
+        row = ctk.CTkFrame(top, fg_color="transparent")
+        row.pack(fill="x", padx=14, pady=12)
+        ctk.CTkLabel(row, text="Interface", text_color="#8b949e").pack(side="left", padx=(0, 4))
+        iface_options = self._detect_interfaces()
+        self.iface_var = tk.StringVar(value=iface_options[0] if iface_options else "auto")
+        self.iface_menu = ctk.CTkOptionMenu(row, variable=self.iface_var, values=iface_options or ["auto"], width=130)
+        self.iface_menu.pack(side="left", padx=(0, 14))
+        ctk.CTkLabel(row, text="CIDR", text_color="#8b949e").pack(side="left", padx=(0, 4))
+        default_net = get_local_network() if PSUTIL_AVAILABLE else "192.168.1.0/24"
+        self.cidr_var = tk.StringVar(value=default_net)
+        ctk.CTkEntry(row, textvariable=self.cidr_var, width=140).pack(side="left", padx=(0, 14))
+        self.passive_var = tk.BooleanVar(value=False)
+        ctk.CTkCheckBox(row, text="Passive mode", variable=self.passive_var).pack(side="left", padx=(0, 14))
+        r = self.make_btn_row(row, self._start, self.stop_op, start_text="▶  Scan")
+        r.pack(side="left", padx=(0, 6))
+        ctk.CTkButton(row, text="🗑", command=self._clear_all, width=40,
+                      fg_color="#21262d", hover_color="#30363d").pack(side="left")
+        ctk.CTkButton(row, text="💾", command=lambda: self.export_output("Netdiscover"), width=40,
+                      fg_color="#21262d", hover_color="#30363d").pack(side="left", padx=(6, 0))
+        pf = ctk.CTkFrame(self, fg_color="transparent")
+        pf.pack(fill="x", padx=20, pady=(0, 6))
+        self._prog_lbl = ctk.CTkLabel(pf, text="Ready", text_color="#8b949e")
+        self._prog_lbl.pack(anchor="w")
+        self._prog_bar = ctk.CTkProgressBar(pf, mode="indeterminate")
+        self._prog_bar.pack(fill="x")
+        self._prog_bar.set(0)
+        self._found_lbl = ctk.CTkLabel(self, text="Hosts discovered: 0", text_color="#79c0ff",
+                                       font=ctk.CTkFont(size=11, weight="bold"))
+        self._found_lbl.pack(anchor="w", padx=24, pady=(0, 6))
+        split = ctk.CTkFrame(self, fg_color="transparent")
+        split.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        split.grid_columnconfigure(0, weight=3)
+        split.grid_columnconfigure(1, weight=2)
+        split.grid_rowconfigure(0, weight=1)
+        tree_frame = ctk.CTkFrame(split, fg_color="#161b22", corner_radius=8)
+        tree_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        style = tk.ttk.Style()
+        style.theme_use("default")
+        style.configure("Netdisc.Treeview", background="#0d1117", foreground="#c9d1d9",
+                        fieldbackground="#0d1117", rowheight=24, font=("Consolas", 10), borderwidth=0)
+        style.configure("Netdisc.Treeview.Heading", background="#21262d", foreground="#79c0ff",
+                        font=("Segoe UI", 10, "bold"), relief="flat")
+        style.map("Netdisc.Treeview", background=[("selected", "#1f6feb")],
+                  foreground=[("selected", "#ffffff")])
+        cols = ("ip", "mac", "vendor", "count", "length")
+        self._tree = tk.ttk.Treeview(tree_frame, columns=cols, show="headings",
+                                     style="Netdisc.Treeview", selectmode="browse")
+        for cid, hdr, w in [
+            ("ip", "IP Address", 120),
+            ("mac", "MAC", 140),
+            ("vendor", "Vendor", 220),
+            ("count", "Count", 60),
+            ("length", "Length", 70),
+        ]:
+            self._tree.heading(cid, text=hdr)
+            self._tree.column(cid, width=w, minwidth=50)
+
+        tsb = ctk.CTkScrollbar(tree_frame, command=self._tree.yview)
+        self._tree.configure(yscrollcommand=tsb.set)
+        tsb.pack(side="right", fill="y", padx=(0, 2), pady=2)
+        self._tree.pack(side="left", fill="both", expand=True, padx=(4, 0), pady=4)
+        self._tree.bind("<<TreeviewSelect>>", self._on_host_select)
+        detail_wrap = ctk.CTkFrame(split, fg_color="#161b22", corner_radius=8)
+        detail_wrap.grid(row=0, column=1, sticky="nsew")
+        dsb = ctk.CTkScrollbar(detail_wrap)
+        dsb.pack(side="right", fill="y", padx=(0, 2), pady=2)
+        self.output = OutputText(detail_wrap, yscrollcommand=dsb.set)
+        self.output.pack(fill="both", expand=True, padx=2, pady=2)
+        dsb.configure(command=self.output.yview)
+        self.output.append("Ready for netdiscover scan.", "info")
+
+    def _detect_interfaces(self) -> list:
+        if not PSUTIL_AVAILABLE:
+            return ["auto"]
+        try:
+            names = [name for name in psutil.net_if_addrs().keys() if name not in ("lo", "lo0")]
+            return ["auto"] + sorted(names) if names else ["auto"]
+        except Exception:
+            return ["auto"]
+
+    def _clear_all(self):
+        if hasattr(self, "_tree"):
+            self._tree.delete(*self._tree.get_children())
+        self._hosts_data.clear()
+        self._seen_macs.clear()
+        self._tree_items.clear()
+        if hasattr(self, "output"):
+            self.output.clear()
+        if hasattr(self, "_found_lbl"):
+            self._found_lbl.configure(text="Hosts discovered: 0")
+        if hasattr(self, "_prog_lbl"):
+            self._prog_lbl.configure(text="Ready")
+        if hasattr(self, "_prog_bar"):
+            try:
+                self._prog_bar.stop()
+            except Exception:
+                pass
+            self._prog_bar.set(0)
+
+    def _on_host_select(self, event):
+        sel = self._tree.selection()
+        if not sel:
+            return
+        item = self._tree.item(sel[0])
+        values = item["values"]
+        if len(values) < 5:
+            return
+        ip, mac, vendor, count, length = values
+        self.output.clear()
+        self.output.append(f"Host: {ip}", "header")
+        self.output.append(f"\nMAC:      {mac}", "info")
+        self.output.append(f"\nVendor:   {vendor}", "info")
+        self.output.append(f"\nSeen:     {count} time(s)", "info")
+        self.output.append(f"\nLength:   {length} bytes", "info")
+
+    def _start(self):
+        if self.running:
+            return
+
+        iface = self.iface_var.get()
+        if iface == "auto":
+            iface = None
+        cidr = self.cidr_var.get().strip() or None
+        passive = self.passive_var.get()
+        if not messagebox.askyesno(
+            "Netdiscover krever privilegier",
+            "Netdiscover krever root eller CAP_NET_RAW + CAP_NET_ADMIN capabilities.\n\n"
+            "Hvis appen ikke har dette, vil scan feile med en melding.\n\n"
+            "Fortsett?",
+        ):
+            return
+        self._clear_all()
+        self.ui_started()
+        self._prog_lbl.configure(text=f"Scanning {'(passive)' if passive else '(active)'}...")
+        try:
+            self._prog_bar.start()
+        except Exception:
+            self._prog_bar.set(0.2)
+        self.start_poll()
+        threading.Thread(target=self._worker, args=(iface, cidr, passive), daemon=True).start()
+
+    def _worker(self, iface, cidr, passive):
+        try:
+            for line, tag in self._backend.run_netdiscover(
+                self.stop_event,
+                interface=iface,
+                cidr=cidr,
+                passive=passive,
+            ):
+                if self.stop_event.is_set():
+                    break
+                if tag == "data":
+                    try:
+                        record = json.loads(line)
+                    except (json.JSONDecodeError, ValueError):
+                        self.q(f"[parse error] {line}", "error")
+                        continue
+                    self._safe_after(0, lambda r=record: self._add_host(r))
+                else:
+                    self.q(line, tag)
+        except NotImplementedError as e:
+            self.q(f"Ikke støttet: {e}", "error")
+        except Exception as e:
+            self.q(f"Uventet feil: {e}", "error")
+        finally:
+            self._safe_after(0, self._scan_done)
+
+    def _add_host(self, record: dict):
+        mac = (record.get("mac") or "").strip()
+        key = mac or (record.get("ip") or "").strip()
+        if not key:
+            return
+        values = (
+            record.get("ip", "?"),
+            mac or "—",
+            record.get("vendor", "") or "Unknown vendor",
+            record.get("count", 0),
+            record.get("length", 0),
+        )
+        if key in self._seen_macs:
+            item_id = self._tree_items.get(key)
+            if item_id:
+                self._tree.item(item_id, values=values)
+            for idx, existing in enumerate(self._hosts_data):
+                existing_key = (existing.get("mac") or "").strip() or (existing.get("ip") or "").strip()
+                if existing_key == key:
+                    self._hosts_data[idx] = record
+                    break
+            return
+
+        self._seen_macs.add(key)
+        self._hosts_data.append(record)
+        item_id = self._tree.insert("", "end", values=values)
+        self._tree_items[key] = item_id
+        self._found_lbl.configure(text=f"Hosts discovered: {len(self._seen_macs)}")
+
+    def _scan_done(self):
+        stopped = self.stop_event.is_set()
+        self.ui_done()
+        try:
+            self._prog_bar.stop()
+        except Exception:
+            pass
+        self._prog_bar.set(0 if stopped else 1)
+        status = "Stopped" if stopped else "Done"
+        self._prog_lbl.configure(text=f"{status} — {len(self._seen_macs)} hosts")
+
+
 # ==================== Subnet Calculator ====================
 class SubnetFrame(BaseToolFrame):
     def __init__(self, parent, **kwargs):
@@ -2946,25 +3230,42 @@ class InterfacesFrame(BaseToolFrame):
             mtu = st.mtu if st else "—"
 
             tag = "success" if status == "UP" else "dim"
-            self.after(0, lambda i=iface, s=status, sp=speed, m=mtu, t=tag:
-                       self.output.append(f"\n[{i}]  Status: {s}  Speed: {sp}  MTU: {m}", t))
+            self._safe_after(0, lambda i=iface, s=status, sp=speed, m=mtu, t=tag:
+                             self.output.append(f"\n[{i}]  Status: {s}  Speed: {sp}  MTU: {m}", t))
 
             for addr in addr_list:
                 if addr.family == socket.AF_INET:
-                    self.after(0, lambda a=addr: self.output.append(
+                    self._safe_after(0, lambda a=addr: self.output.append(
                         f"  IPv4:    {a.address}  /  {a.netmask}", "info"))
                 elif addr.family == socket.AF_INET6:
-                    self.after(0, lambda a=addr: self.output.append(
+                    self._safe_after(0, lambda a=addr: self.output.append(
                         f"  IPv6:    {a.address}", "dim"))
                 elif addr.family == psutil.AF_LINK:
-                    self.after(0, lambda a=addr: self.output.append(
+                    self._safe_after(0, lambda a=addr: self.output.append(
                         f"  MAC:     {a.address}", "dim"))
 
-        self.after(0, lambda: self.output.append(
+        self._safe_after(0, lambda: self.output.append(
             f"\n{'─'*55}\nTotal interfaces: {len(addrs)}", "dim"))
 
     def _with_ipconfig(self):
         try:
+            details = _pu_net.interface_details()
+            if details is not None:
+                for iface in details:
+                    status = iface.get("status", "—")
+                    mtu = iface.get("mtu") or "—"
+                    tag = "success" if status == "UP" else ("dim" if status == "DOWN" else "normal")
+                    self._safe_after(0, lambda i=iface["name"], s=status, m=mtu, t=tag:
+                                     self.output.append(f"\n[{i}]  Status: {s}  Speed: —  MTU: {m}", t))
+                    if iface.get("ipv4"):
+                        self._safe_after(0, lambda a=iface["ipv4"], n=iface.get("netmask") or iface.get("prefix", ""):
+                                         self.output.append(f"  IPv4:    {a}  /  {n}", "info"))
+                    if iface.get("mac"):
+                        self._safe_after(0, lambda a=iface["mac"]:
+                                         self.output.append(f"  MAC:     {a}", "dim"))
+                self._safe_after(0, lambda: self.output.append(
+                    f"\n{'─'*55}\nTotal interfaces: {len(details)}", "dim"))
+                return
             res = subprocess.run(_pu_net.ipconfig_command(),
                                  capture_output=True, text=True,
                                  creationflags=SUBPROCESS_FLAGS)
@@ -2980,9 +3281,9 @@ class InterfacesFrame(BaseToolFrame):
                     tag = "dim"
                 else:
                     tag = "normal"
-                self.after(0, lambda l=line, t=tag: self.output.append(l, t))
+                self._safe_after(0, lambda l=line, t=tag: self.output.append(l, t))
         except Exception as e:
-            self.after(0, lambda: self.output.append(f"Error: {e}", "error"))
+            self._safe_after(0, lambda: self.output.append(f"Error: {e}", "error"))
 
 
 # ==================== Bandwidth Monitor ====================
@@ -3196,16 +3497,16 @@ class ConnectionsFrame(BaseToolFrame):
 
     def _refresh(self):
         self.output.clear()
-        threading.Thread(target=self._worker, daemon=True).start()
-
-    def _worker(self):
         filt = self.filter_var.get()
-        self.after(0, lambda: self.output.append(
+        threading.Thread(target=self._worker, args=(filt,), daemon=True).start()
+
+    def _worker(self, filt):
+        self._safe_after(0, lambda: self.output.append(
             f"Active connections — {datetime.now().strftime('%H:%M:%S')}  "
             f"[filter: {filt}]", "header"))
-        self.after(0, lambda: self.output.append(
+        self._safe_after(0, lambda: self.output.append(
             f"{'Proto':<7} {'Local Address':<28} {'Remote Address':<28} {'State':<16} {'PID'}", "header"))
-        self.after(0, lambda: self.output.append("─" * 90, "dim"))
+        self._safe_after(0, lambda: self.output.append("─" * 90, "dim"))
 
         if PSUTIL_AVAILABLE:
             conns = psutil.net_connections(kind="inet")
@@ -3230,12 +3531,39 @@ class ConnectionsFrame(BaseToolFrame):
                     tag = "normal"
 
                 line = f"{proto:<7} {la:<28} {ra:<28} {state:<16} {pid}"
-                self.after(0, lambda l=line, t=tag: self.output.append(l, t))
+                self._safe_after(0, lambda l=line, t=tag: self.output.append(l, t))
 
-            self.after(0, lambda: self.output.append(
+            self._safe_after(0, lambda: self.output.append(
                 f"\n{count} connection(s) shown", "dim"))
         else:
             try:
+                rows = _pu_net.connection_details()
+                if rows is not None:
+                    count = 0
+                    for c in rows:
+                        proto = c.get("proto", "").upper()
+                        state = c.get("state") or "—"
+                        if filt not in ("All", proto) and filt != state:
+                            continue
+                        la = f"{c.get('local_address') or '—'}:{c.get('local_port') or '—'}"
+                        ra = f"{c.get('remote_address') or '—'}:{c.get('remote_port') or '—'}"
+                        pid = str(c.get("pid")) if c.get("pid") is not None else "—"
+                        count += 1
+
+                        if state == "ESTABLISHED":
+                            tag = "success"
+                        elif state == "LISTEN":
+                            tag = "info"
+                        elif state in ("TIME_WAIT", "CLOSE_WAIT"):
+                            tag = "warning"
+                        else:
+                            tag = "normal"
+
+                        line = f"{proto:<7} {la:<28} {ra:<28} {state:<16} {pid}"
+                        self._safe_after(0, lambda l=line, t=tag: self.output.append(l, t))
+                    self._safe_after(0, lambda: self.output.append(
+                        f"\n{count} connection(s) shown", "dim"))
+                    return
                 res = subprocess.run(_pu_net.netstat_command(),
                                      capture_output=True, text=True,
                                      timeout=10, creationflags=SUBPROCESS_FLAGS)
@@ -3253,9 +3581,9 @@ class ConnectionsFrame(BaseToolFrame):
                         tag = "warning"
                     else:
                         tag = "normal"
-                    self.after(0, lambda l=line, t=tag: self.output.append(l, t))
+                    self._safe_after(0, lambda l=line, t=tag: self.output.append(l, t))
             except Exception as e:
-                self.after(0, lambda: self.output.append(f"Error: {e}", "error"))
+                self._safe_after(0, lambda: self.output.append(f"Error: {e}", "error"))
 
 
 # ==================== ARP Table ====================
@@ -3300,9 +3628,9 @@ class ARPFrame(BaseToolFrame):
         threading.Thread(target=self._run_arp, args=["-a"], daemon=True).start()
 
     def _run_arp(self, *args):
-        self.after(0, lambda: self.output.append(
+        self._safe_after(0, lambda: self.output.append(
             f"ARP Table — {datetime.now().strftime('%H:%M:%S')}", "header"))
-        self.after(0, lambda: self.output.append("─" * 70, "dim"))
+        self._safe_after(0, lambda: self.output.append("─" * 70, "dim"))
         try:
             res = subprocess.run(_pu_net.arp_command(*args),
                                  capture_output=True, text=True,
@@ -3321,9 +3649,9 @@ class ARPFrame(BaseToolFrame):
                     tag = "success"
                 else:
                     tag = "dim"
-                self.after(0, lambda l=line, t=tag: self.output.append(l, t))
+                self._safe_after(0, lambda l=line, t=tag: self.output.append(l, t))
         except Exception as e:
-            self.after(0, lambda: self.output.append(f"Error: {e}", "error"))
+            self._safe_after(0, lambda: self.output.append(f"Error: {e}", "error"))
 
 
 # ==================== IP Camera Finder ====================
@@ -6373,9 +6701,12 @@ class CameraAnalysisFrame(BaseToolFrame):
                       command=lambda: self._save_favorite_dialog("Host", self._target_var.get().strip()),
                       width=40, fg_color="#21262d", hover_color="#30363d").pack(side="left", padx=(6, 0))
         self._admin_lbl = ctk.CTkLabel(
-            row2, text="⚠  Live Capture requires administrator privileges",
+            row2,
+            text=("⚠  Live Capture requires CAP_NET_RAW or root"
+                  if _pu_detect.IS_LINUX
+                  else "⚠  Live Capture requires administrator privileges"),
             text_color="#d29922", font=ctk.CTkFont(size=11),
-        )  # hidden by default — shown on PermissionError
+        )  # hidden by default — shown on capture permission error
         self._mode_lbl = ctk.CTkLabel(
             row2, text="", text_color="#58a6ff", font=ctk.CTkFont(size=11),
         )  # shows active analysis mode during run
@@ -6491,6 +6822,7 @@ class CameraAnalysisFrame(BaseToolFrame):
             self.output.append("No adapter selected or no IPv4 adapters found.", "error")
             return
         adapter_ip, adapter_mask, adapter_label = adapter
+        adapter_name = adapter_label.split("[", 1)[0].strip()
         mode     = self._mode_var.get()
         duration = self._duration_var.get()
 
@@ -6550,7 +6882,7 @@ class CameraAnalysisFrame(BaseToolFrame):
         elif mode == "live":
             threading.Thread(
                 target=self._worker_live_capture,
-                args=(adapter_ip, adapter_mask, duration),
+                args=(adapter_name, adapter_ip, adapter_mask, duration),
                 daemon=True,
             ).start()
         else:
@@ -6737,14 +7069,20 @@ class CameraAnalysisFrame(BaseToolFrame):
         return ev
 
     # ── Live Capture worker ────────────────────────────────────────────────
-    def _worker_live_capture(self, adapter_ip, adapter_mask, duration):
+    def _worker_live_capture(self, adapter_name, adapter_ip, adapter_mask, duration):
         dhcp_seen = {}   # mac -> latest DHCP dict
         raw = None
         try:
-            raw = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
-            raw.bind((adapter_ip, 0))
-            raw.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
-            raw.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
+            if _pu_detect.IS_LINUX:
+                if not _pu_caps.has_net_raw():
+                    raise PermissionError("CAP_NET_RAW or root privileges are required")
+                raw = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(_LINUX_ETH_P_IP))
+                raw.bind((adapter_name, 0))
+            else:
+                raw = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
+                raw.bind((adapter_ip, 0))
+                raw.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+                raw.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
             raw.settimeout(1.0)
             self.q(f"Live capture started on {adapter_ip} for {duration}s…", "info")
             deadline   = time.time() + duration
@@ -6753,7 +7091,10 @@ class CameraAnalysisFrame(BaseToolFrame):
                 try:
                     data, _ = raw.recvfrom(65535)
                     pkt_count += 1
-                    parsed = _parse_dhcp_from_raw(data)
+                    packet = _capture_ipv4_packet(data)
+                    if packet is None:
+                        continue
+                    parsed = _parse_dhcp_from_raw(packet)
                     if parsed and parsed.get("mac"):
                         mac = parsed["mac"]
                         dhcp_seen[mac] = parsed
@@ -6765,7 +7106,10 @@ class CameraAnalysisFrame(BaseToolFrame):
                 f"Capture done. {pkt_count} UDP packets, {len(dhcp_seen)} DHCP device(s).", "dim",
             )
         except PermissionError:
-            self.q("Live Capture requires administrator privileges.", "error")
+            if _pu_detect.IS_LINUX:
+                self.q("Raw socket access unavailable on Linux. Run with CAP_NET_RAW or as root.", "error")
+            else:
+                self.q("Live Capture requires administrator privileges.", "error")
             self.q("Falling back to ARP + Scan…", "warning")
             self.after(0, lambda: self._admin_lbl.pack(side="left", padx=(16, 0)))
         except Exception as exc:
@@ -6773,7 +7117,8 @@ class CameraAnalysisFrame(BaseToolFrame):
         finally:
             if raw is not None:
                 try:
-                    raw.ioctl(socket.SIO_RCVALL, socket.RCVALL_OFF)
+                    if not _pu_detect.IS_LINUX:
+                        raw.ioctl(socket.SIO_RCVALL, socket.RCVALL_OFF)
                     raw.close()
                 except Exception:
                     pass
@@ -8094,8 +8439,12 @@ class LiveCaptureFrame(BaseToolFrame):
         self._build()
 
     def _build(self):
-        self.make_header("\U0001f4e6  Live Packet Capture",
-                         "Capture live network traffic (requires Administrator)")
+        self.make_header(
+            "\U0001f4e6  Live Packet Capture",
+            ("Capture live network traffic (requires CAP_NET_RAW or root on Linux)"
+             if _pu_detect.IS_LINUX
+             else "Capture live network traffic (requires Administrator)"),
+        )
 
         content = ctk.CTkFrame(self, fg_color="transparent")
         content.pack(fill="both", expand=True)
@@ -8146,8 +8495,13 @@ class LiveCaptureFrame(BaseToolFrame):
                       width=0).grid(row=2, column=0, columnspan=2, sticky="ew", pady=(4, 0))
 
         # Admin warning
-        ctk.CTkLabel(left, text="\u26a0 Requires Administrator",
-                     text_color="#d29922", font=ctk.CTkFont(size=10)).pack(padx=14, pady=(8, 14))
+        ctk.CTkLabel(
+            left,
+            text=("\u26a0 Requires CAP_NET_RAW or root"
+                  if _pu_detect.IS_LINUX
+                  else "\u26a0 Requires Administrator"),
+            text_color="#d29922", font=ctk.CTkFont(size=10),
+        ).pack(padx=14, pady=(8, 14))
 
         # ── Right panel ──
         right = ctk.CTkFrame(content, fg_color="transparent")
@@ -8169,7 +8523,7 @@ class LiveCaptureFrame(BaseToolFrame):
                 for addr in addrs:
                     if addr.family == socket.AF_INET and addr.address != "127.0.0.1":
                         label = f"{iface} [{addr.address}]"
-                        self._adapter_map[label] = addr.address
+                        self._adapter_map[label] = {"name": iface, "ip": addr.address}
                         entries.append(label)
         if not entries:
             entries = ["(no adapters found)"]
@@ -8199,10 +8553,12 @@ class LiveCaptureFrame(BaseToolFrame):
         if self.running:
             return
         adapter_label = self._adapter_var.get()
-        adapter_ip = self._adapter_map.get(adapter_label)
-        if not adapter_ip:
+        adapter = self._adapter_map.get(adapter_label)
+        if not adapter:
             messagebox.showwarning("Input", "Select a valid network adapter.")
             return
+        adapter_name = adapter["name"]
+        adapter_ip = adapter["ip"]
         max_pkts = max(50, min(5000, self._max_var.get()))
         filters = {
             "tcp": self._f_tcp.get(),
@@ -8217,20 +8573,31 @@ class LiveCaptureFrame(BaseToolFrame):
         self.output.append("\u2500" * 90, "dim")
         self.start_poll()
         threading.Thread(target=self._capture_worker,
-                         args=(adapter_ip, filters, max_pkts),
+                         args=(adapter_name, adapter_ip, filters, max_pkts),
                          daemon=True).start()
 
     # ── Capture worker ──
 
-    def _capture_worker(self, adapter_ip, filters, max_pkts):
+    def _capture_worker(self, adapter_name, adapter_ip, filters, max_pkts):
         sock = None
         try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IP)
-            sock.bind((adapter_ip, 0))
-            sock.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
+            if _pu_detect.IS_LINUX:
+                if not _pu_caps.has_net_raw():
+                    self.q("Raw socket access unavailable on Linux. Run with CAP_NET_RAW or as root.", "error")
+                    self.after(0, self.ui_done)
+                    return
+                sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(_LINUX_ETH_P_IP))
+                sock.bind((adapter_name, 0))
+            else:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IP)
+                sock.bind((adapter_ip, 0))
+                sock.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
         except (PermissionError, OSError) as e:
             self.q(f"\u26a0 Cannot open raw socket: {e}", "error")
-            self.q("  Run NetTools Pro as Administrator to use Live Capture.", "warning")
+            if _pu_detect.IS_LINUX:
+                self.q("  Raw socket access unavailable on Linux. Run with CAP_NET_RAW or as root.", "warning")
+            else:
+                self.q("  Run NetTools Pro as Administrator to use Live Capture.", "warning")
             self.after(0, self.ui_done)
             return
 
@@ -8244,7 +8611,10 @@ class LiveCaptureFrame(BaseToolFrame):
                     continue
                 except OSError:
                     break
-                pkt = self._parse_ip_packet(data)
+                packet = _capture_ipv4_packet(data)
+                if packet is None:
+                    continue
+                pkt = self._parse_ip_packet(packet)
                 if pkt and self._passes_filter(pkt, filters):
                     self._cnt_total += 1
                     proto = pkt["proto"]
@@ -8263,7 +8633,8 @@ class LiveCaptureFrame(BaseToolFrame):
         finally:
             try:
                 if sock:
-                    sock.ioctl(socket.SIO_RCVALL, socket.RCVALL_OFF)
+                    if not _pu_detect.IS_LINUX:
+                        sock.ioctl(socket.SIO_RCVALL, socket.RCVALL_OFF)
                     sock.close()
             except Exception:
                 pass
@@ -8546,6 +8917,7 @@ class DashboardFrame(ctk.CTkFrame):
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
+        self.withdraw()
         # Load persistent data
         FavoritesManager.load()
         SettingsManager.load()
@@ -8580,6 +8952,7 @@ class App(ctk.CTk):
             "traceroute":   TracerouteFrame,
             "dns":          DNSFrame,
             "netscan":      NetworkScanFrame,
+            "netdiscover":  NetdiscoverFrame,
             "subnet":       SubnetFrame,
             "wol":          WoLFrame,
             "interfaces":   InterfacesFrame,
@@ -8609,6 +8982,12 @@ class App(ctk.CTk):
         self._tray = TrayManager(self)
         self._tray.setup()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.after_idle(self._finish_startup)
+
+    def _finish_startup(self):
+        self.update_idletasks()
+        self.deiconify()
+        self.lift()
 
     def _on_close(self):
         if PYSTRAY_AVAILABLE and SettingsManager.get("minimize_to_tray", True):
