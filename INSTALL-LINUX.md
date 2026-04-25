@@ -1,6 +1,6 @@
 # NetTools Pro — Linux installation
 
-Tested on Ubuntu 22.04+ and Debian 12+.
+Tested on Ubuntu 22.04+, Debian 12+, and Fedora 43.
 
 ## Quick start
 
@@ -12,22 +12,24 @@ python3 nettools.py
 
 ## What install.sh does
 
-1. Installs system packages via apt (requires sudo)
+1. Detects `dnf` or `apt` and installs system packages (requires sudo)
 2. Creates a Python virtual environment in `.venv/`
 3. Installs all Python dependencies from `requirements.txt`
+4. Rebuilds `.venv/` automatically if the system Python version has changed
 
 ## System packages installed
 
-| Package | Why |
+`install.sh` auto-detects `dnf` or `apt` and installs distro-appropriate packages.
+
+| Distro | Packages |
 |---|---|
-| `python3-pip` | pip package manager |
-| `python3-venv` | virtual environment support |
-| `python3-tk` | tkinter GUI backend (required by customtkinter) |
-| `python3-pil.imagetk` | PIL + tkinter image integration |
-| `traceroute` | Traceroute tool (app raises clear error if missing) |
-| `net-tools` | `arp` command for ARP table view |
-| `iproute2` | `ip` and `ss` commands for interface/connection info |
-| `xdg-utils` | `xdg-open` for opening URLs and folders |
+| Ubuntu / Debian | `python3-pip`, `python3-venv`, `python3-tk`, `python3-pil.imagetk`, `traceroute`, `net-tools`, `arp-scan`, `iproute2`, `xdg-utils`, `nmap`, `lshw`, `dmidecode` |
+| Fedora | `python3-tkinter`, `traceroute`, `net-tools`, `arp-scan`, `iproute`, `xdg-utils`, `nmap`, `lshw`, `dmidecode` |
+
+## ARP Scan note
+
+`arp-scan` requires root privileges or `CAP_NET_RAW` to run. The app will show a clear
+message if the binary is installed but does not have the required privileges.
 
 ## Python dependencies
 

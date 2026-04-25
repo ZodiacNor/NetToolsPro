@@ -1,11 +1,11 @@
 """
-system_backend.py — Plattform-backend for SystemToolsFrame.
+system_backend.py — Platform backend for SystemToolsFrame.
 
-Abstrakt lag mellom SystemToolsFrame og OS-spesifikke verktøy
-(PowerShell/SFC/DISM på Windows, fremtidige Linux-ekvivalenter).
+Abstract layer between SystemToolsFrame and OS-specific tools
+(PowerShell/SFC/DISM on Windows, future Linux equivalents).
 
-Generator-baserte streaming-metoder yielder (linje, tag)-tupler.
-Framen konsumerer generatoren og kaller self.q(line, tag) per element.
+Generator-based streaming methods yield (line, tag) tuples.
+The frame consumes the generator and calls self.q(line, tag) for each item.
 """
 
 import os
@@ -34,10 +34,10 @@ except ImportError:
     psutil = None
     PSUTIL_AVAILABLE = False
 
-# (linje_tekst, tag) der tag ∈ {"header", "normal", "info", "success", "warning", "error", "dim"}
+# (line_text, tag) where tag ∈ {"header", "normal", "info", "success", "warning", "error", "dim"}
 OutputLine = Tuple[str, str]
 
-# ── Modul-level konstanter (kopiert verbatim fra nettools.py) ─────────────────
+# ── Module-level constants (copied verbatim from nettools.py) ─────────────────
 
 # Inline PowerShell script for system diagnostics.
 # Mirrors the sections in SkipperToolkit.ps1 Invoke-PCDiagnostikk:
@@ -171,64 +171,64 @@ _SFC_RESULTS = [
 ]
 
 
-# ── Abstrakt baseklasse ───────────────────────────────────────────────────────
+# ── Abstract base class ───────────────────────────────────────────────────────
 
 class SystemBackend(ABC):
-    """Abstrakt plattform-backend for system-verktøy.
+    """Abstract platform backend for system tools.
 
-    Generator-baserte metoder yielder output mens prosessen kjører.
-    Frame konsumerer generator og kaller self.q(line, tag) for hver line.
+    Generator-based methods yield output while the process is running.
+    The frame consumes the generator and calls self.q(line, tag) for each line.
     """
 
-    # ── Capability-rapportering ───────────────────────────────────────────────
+    # ── Capability reporting ──────────────────────────────────────────────────
 
     @abstractmethod
     def available_tools(self) -> set:
-        """Returnerer set av verktøy-navn som er støttet på denne plattformen.
-        Navn: 'diagnostics', 'sfc', 'dism', 'backup', 'restore', 'debloat', 'netdiscover'."""
+        """Return a set of tool names supported on this platform.
+        Names: 'diagnostics', 'sfc', 'dism', 'backup', 'restore', 'debloat', 'arpscan'."""
 
     @abstractmethod
     def admin_required_for(self, tool: str) -> bool:
-        """True hvis verktøyet krever admin/root for å fungere."""
+        """True if the tool requires admin/root privileges to work."""
 
-    # ── Streaming-operasjoner (generatorer) ──────────────────────────────────
+    # ── Streaming operations (generators) ────────────────────────────────────
 
     @abstractmethod
     def run_diagnostics(self, stop_event: Event) -> Iterator[OutputLine]:
-        """Kjører systemdiagnostikk. Yielder (line, tag) per output-linje.
-        Sjekk stop_event.is_set() mellom linjer og terminer prosess ved abort."""
+        """Run system diagnostics. Yield (line, tag) per output line.
+        Check stop_event.is_set() between lines and terminate the process on abort."""
 
     @abstractmethod
     def run_sfc(self, stop_event: Event) -> Iterator[OutputLine]:
-        """Kjører SFC-scan. Yielder (line, tag). Siste yield skal være
-        en resultat-linje med tag 'success'/'error'/'warning' basert på output."""
+        """Run an SFC scan. Yield (line, tag). The final yield should be
+        a result line with tag 'success'/'error'/'warning' based on the output."""
 
     @abstractmethod
     def run_dism(self, stop_event: Event) -> Iterator[OutputLine]:
-        """Kjører DISM restore-health. Yielder (line, tag)."""
+        """Run DISM restore-health. Yield (line, tag)."""
 
-    # ── Service-primitiver (synkron) ─────────────────────────────────────────
+    # ── Service primitives (synchronous) ─────────────────────────────────────
 
     @abstractmethod
     def export_services(self, path: str) -> None:
-        """Eksporterer alle services til JSON-fil. Kaster IOError ved feil."""
+        """Export all services to a JSON file. Raise IOError on failure."""
 
     @abstractmethod
     def set_service_startup(self, name: str, startup_type: str, dry: bool) -> tuple:
-        """Setter oppstartstype for én service.
-        Returnerer (success, display_line).
-        dry=True returnerer preview-linje uten å kjøre kommandoen."""
+        """Set the startup type for one service.
+        Returns (success, display_line).
+        dry=True returns a preview line without running the command."""
 
     @abstractmethod
-    def run_netdiscover(self, stop_event: Event, **kwargs) -> Iterator[OutputLine]:
-        """Kjør netdiscover-scan (kun støttet på Linux).
-        Yielder (linje, tag)-tupler der tag='data' betyr JSON-serialisert enhet."""
+    def run_arp_scan(self, stop_event: Event, **kwargs) -> Iterator[OutputLine]:
+        """Run arp-scan (supported on Linux only).
+        Yield (line, tag) tuples where tag='data' means a JSON-serialized device."""
 
 
-# ── Windows-implementasjon ────────────────────────────────────────────────────
+# ── Windows implementation ────────────────────────────────────────────────────
 
 class WindowsBackend(SystemBackend):
-    """Full Windows-implementasjon basert på PowerShell, SFC og DISM."""
+    """Full Windows implementation based on PowerShell, SFC, and DISM."""
 
     def available_tools(self) -> set:
         return {"diagnostics", "sfc", "dism", "backup", "restore", "debloat"}
@@ -327,10 +327,9 @@ class WindowsBackend(SystemBackend):
         line = res.stdout.strip() or res.stderr.strip()
         return line.startswith("OK:"), line
 
-    def run_netdiscover(self, stop_event: Event, **kwargs) -> Iterator[OutputLine]:
-        """Netdiscover er Linux-only. Frame skal ikke kalle denne på Windows
-        (SystemToolsFrame's conditional rendering filtrerer basert på available_tools())."""
-        raise NotImplementedError("Netdiscover er ikke tilgjengelig på Windows")
+    def run_arp_scan(self, stop_event: Event, **kwargs) -> Iterator[OutputLine]:
+        """ARP Scan is Linux-only. The frontend should not call this on Windows."""
+        raise NotImplementedError("ARP Scan is not available on Windows")
         yield  # pragma: no cover - needed to make this a generator
 
 
@@ -351,6 +350,35 @@ class LinuxBackend(SystemBackend):
         except OSError:
             pass
         return "Linux"
+
+    @staticmethod
+    def _linux_package_manager() -> str:
+        if shutil.which("dnf"):
+            return "dnf"
+        if shutil.which("apt"):
+            return "apt"
+        if shutil.which("apt-get"):
+            return "apt"
+        return "unknown"
+
+    @staticmethod
+    def _arp_scan_capability_fix_lines(pkg_manager: str | None = None) -> list[OutputLine]:
+        manager = pkg_manager or LinuxBackend._linux_package_manager()
+        if manager == "dnf":
+            return [
+                ("Run this command and try again:", "warning"),
+                ('sudo dnf install -y libcap && sudo setcap cap_net_raw+p "$(command -v arp-scan)"', "info"),
+            ]
+        if manager == "apt":
+            return [
+                ("Run this command and try again:", "warning"),
+                ('sudo apt install -y libcap2-bin && sudo setcap cap_net_raw+p "$(command -v arp-scan)"', "info"),
+            ]
+        return [
+            ("Run one of these commands and try again:", "warning"),
+            ('Fedora/RHEL: sudo dnf install -y libcap && sudo setcap cap_net_raw+p "$(command -v arp-scan)"', "info"),
+            ('Ubuntu/Debian: sudo apt install -y libcap2-bin && sudo setcap cap_net_raw+p "$(command -v arp-scan)"', "info"),
+        ]
 
     @staticmethod
     def _run_command(cmd: list[str], timeout: float = 5.0) -> tuple[str | None, str | None]:
@@ -399,6 +427,83 @@ class LinuxBackend(SystemBackend):
                 return f.readline().strip()
         except OSError:
             return ""
+
+    @staticmethod
+    def _read_int_file(path: Path) -> int | None:
+        try:
+            return int(path.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            return None
+
+    @staticmethod
+    def _battery_health_percent(battery_dir: Path) -> float | None:
+        now_full = None
+        design_full = None
+
+        for current_name, design_name in (
+            ("charge_full", "charge_full_design"),
+            ("energy_full", "energy_full_design"),
+        ):
+            now_full = LinuxBackend._read_int_file(battery_dir / current_name)
+            design_full = LinuxBackend._read_int_file(battery_dir / design_name)
+            if now_full is not None and design_full:
+                break
+
+        if now_full is None or not design_full or design_full <= 0:
+            return None
+        return max(min((now_full / design_full) * 100.0, 100.0), 0.0)
+
+    @staticmethod
+    def _battery_lines() -> list[OutputLine]:
+        battery_dirs = sorted(
+            [
+                path for path in Path("/sys/class/power_supply").glob("BAT*")
+                if path.is_dir()
+            ],
+            key=lambda path: path.name,
+        )
+
+        if not battery_dirs and PSUTIL_AVAILABLE:
+            try:
+                battery = psutil.sensors_battery()
+                if battery is not None:
+                    status = "Charging" if battery.power_plugged else "Discharging"
+                    if battery.percent is not None and battery.power_plugged and battery.percent >= 99:
+                        status = "Full"
+                    return [
+                        (f"Status: {status}", "info"),
+                        (f"Capacity: {battery.percent:.0f}%", "info"),
+                        ("Health: unavailable", "dim"),
+                    ]
+            except Exception:
+                pass
+
+        if not battery_dirs:
+            return [("Battery telemetry unavailable.", "dim")]
+
+        lines: list[OutputLine] = []
+        for battery_dir in battery_dirs:
+            status = LinuxBackend._read_first_line(str(battery_dir / "status")) or "Unknown"
+            capacity = LinuxBackend._read_int_file(battery_dir / "capacity")
+            health = LinuxBackend._battery_health_percent(battery_dir)
+            cycle_count = LinuxBackend._read_int_file(battery_dir / "cycle_count")
+
+            prefix = f"{battery_dir.name} " if len(battery_dirs) > 1 else ""
+            lines.append((f"{prefix}Status: {status}", "info"))
+            if capacity is not None:
+                lines.append((f"{prefix}Capacity: {capacity}%", "info"))
+            else:
+                lines.append((f"{prefix}Capacity: unavailable", "dim"))
+
+            if health is not None:
+                lines.append((f"{prefix}Health: {health:.1f}% of design capacity", "info"))
+            else:
+                lines.append((f"{prefix}Health: unavailable", "dim"))
+
+            if cycle_count is not None:
+                lines.append((f"{prefix}Cycle count: {cycle_count}", "info"))
+
+        return lines
 
     @staticmethod
     def _read_load_average() -> str:
@@ -611,7 +716,85 @@ class LinuxBackend(SystemBackend):
         return ipv4s
 
     @staticmethod
-    def _network_lines() -> list[OutputLine]:
+    def _network_io_snapshot() -> tuple[int, int] | None:
+        if PSUTIL_AVAILABLE:
+            try:
+                totals = psutil.net_io_counters(pernic=True)
+                rx_total = 0
+                tx_total = 0
+                for iface_name, counters in totals.items():
+                    if iface_name == "lo":
+                        continue
+                    rx_total += int(getattr(counters, "bytes_recv", 0) or 0)
+                    tx_total += int(getattr(counters, "bytes_sent", 0) or 0)
+                return rx_total, tx_total
+            except Exception:
+                pass
+
+        try:
+            rx_total = 0
+            tx_total = 0
+            with open("/proc/net/dev", "r", encoding="utf-8") as f:
+                for line in f.readlines()[2:]:
+                    if ":" not in line:
+                        continue
+                    iface_name, raw_values = line.split(":", 1)
+                    if iface_name.strip() == "lo":
+                        continue
+                    fields = raw_values.split()
+                    if len(fields) < 9:
+                        continue
+                    rx_total += int(fields[0])
+                    tx_total += int(fields[8])
+            return rx_total, tx_total
+        except (OSError, ValueError):
+            return None
+
+    @staticmethod
+    def _format_mb_per_second(bytes_per_second: float | None) -> str:
+        if bytes_per_second is None:
+            return "n/a"
+        return f"{bytes_per_second / (1024 ** 2):.2f} MB/s"
+
+    @staticmethod
+    def _sleep_with_abort(stop_event: Event, duration_s: float, slice_s: float = 0.1) -> bool:
+        deadline = time.monotonic() + duration_s
+        while True:
+            if stop_event.is_set():
+                return False
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return True
+            time.sleep(min(slice_s, remaining))
+
+    @staticmethod
+    def _network_speed_lines(stop_event: Event, sample_seconds: float = 1.0) -> list[OutputLine]:
+        first = LinuxBackend._network_io_snapshot()
+        if first is None:
+            return [("Live throughput unavailable.", "dim")]
+
+        started = time.monotonic()
+        if not LinuxBackend._sleep_with_abort(stop_event, sample_seconds):
+            raise InterruptedError
+
+        second = LinuxBackend._network_io_snapshot()
+        elapsed = max(time.monotonic() - started, 0.001)
+        if second is None:
+            return [("Live throughput unavailable.", "dim")]
+
+        rx_rate = max(second[0] - first[0], 0) / elapsed
+        tx_rate = max(second[1] - first[1], 0) / elapsed
+        return [
+            (
+                "Live throughput (all non-loopback, 1s sample): "
+                f"Download {LinuxBackend._format_mb_per_second(rx_rate)}  "
+                f"Upload {LinuxBackend._format_mb_per_second(tx_rate)}",
+                "info",
+            )
+        ]
+
+    @staticmethod
+    def _network_lines(stop_event: Event) -> list[OutputLine]:
         lines: list[OutputLine] = []
         try:
             interfaces = sorted(Path("/sys/class/net").iterdir(), key=lambda p: p.name)
@@ -659,6 +842,7 @@ class LinuxBackend(SystemBackend):
                 except Exception:
                     pass
         lines.append((f"Established connections: {established}", "info"))
+        lines.extend(LinuxBackend._network_speed_lines(stop_event))
         return lines
 
     @staticmethod
@@ -746,6 +930,152 @@ class LinuxBackend(SystemBackend):
         return [("Temperature sensors unavailable.", "dim")]
 
     @staticmethod
+    def _read_assignment_file(path: Path) -> dict[str, str]:
+        values: dict[str, str] = {}
+        try:
+            raw_text = path.read_text(encoding="utf-8")
+        except OSError:
+            return values
+
+        for line in raw_text.splitlines():
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip()
+        return values
+
+    @staticmethod
+    def _pci_device_label(slot_name: str, fallback: str) -> str:
+        if not slot_name:
+            return fallback
+
+        output, error = LinuxBackend._run_command(["lspci", "-s", slot_name, "-nn"], timeout=2.0)
+        if error or not output:
+            return fallback
+
+        first_line = output.splitlines()[0].strip()
+        if ": " in first_line:
+            return first_line.split(": ", 1)[1].strip() or fallback
+        return first_line or fallback
+
+    @staticmethod
+    def _read_first_matching_int(base_dir: Path, patterns: tuple[str, ...]) -> int | None:
+        for pattern in patterns:
+            for candidate in sorted(base_dir.glob(pattern)):
+                value = LinuxBackend._read_int_file(candidate)
+                if value is not None:
+                    return value
+        return None
+
+    @staticmethod
+    def _intel_gpu_temperature_c(card_dir: Path) -> float | None:
+        value = LinuxBackend._read_first_matching_int(
+            card_dir,
+            (
+                "device/hwmon/hwmon*/temp1_input",
+                "device/hwmon/hwmon*/temp*_input",
+            ),
+        )
+        if value is None:
+            return None
+        return value / 1000.0 if value > 1000 else float(value)
+
+    @staticmethod
+    def _intel_gpu_utilization_percent(card_dir: Path) -> int | None:
+        value = LinuxBackend._read_first_matching_int(
+            card_dir,
+            (
+                "gpu_busy_percent",
+                "device/gpu_busy_percent",
+                "gt/gt*/busy_percent",
+                "device/gt/gt*/busy_percent",
+            ),
+        )
+        if value is None:
+            return None
+        return max(min(value, 100), 0)
+
+    @staticmethod
+    def _intel_gpu_lines() -> list[OutputLine]:
+        try:
+            drm_cards = sorted(Path("/sys/class/drm").glob("card[0-9]"), key=lambda path: path.name)
+        except OSError:
+            return []
+
+        intel_cards = [
+            card_dir for card_dir in drm_cards
+            if LinuxBackend._read_first_line(str(card_dir / "device" / "vendor")).lower() == "0x8086"
+        ]
+        if not intel_cards:
+            return []
+
+        lines: list[OutputLine] = []
+        multiple_cards = len(intel_cards) > 1
+
+        for card_dir in intel_cards:
+            device_dir = card_dir / "device"
+            uevent = LinuxBackend._read_assignment_file(device_dir / "uevent")
+            driver = uevent.get("DRIVER", "unknown")
+            pci_id = uevent.get("PCI_ID", "")
+            slot_name = uevent.get("PCI_SLOT_NAME", "")
+            fallback = f"Intel GPU {pci_id}" if pci_id else "Intel GPU"
+            label = LinuxBackend._pci_device_label(slot_name, fallback)
+            prefix = f"{card_dir.name}: " if multiple_cards else ""
+
+            lines.append((f"{prefix}{label}", "info"))
+
+            detail_parts = []
+            if driver:
+                detail_parts.append(f"driver {driver}")
+            if pci_id:
+                detail_parts.append(f"PCI {pci_id}")
+            if slot_name:
+                detail_parts.append(f"slot {slot_name}")
+            if detail_parts:
+                lines.append((f"{prefix}{'  '.join(detail_parts)}", "info"))
+
+            temp_c = LinuxBackend._intel_gpu_temperature_c(card_dir)
+            util_pct = LinuxBackend._intel_gpu_utilization_percent(card_dir)
+            if temp_c is not None:
+                lines.append((f"{prefix}Temperature: {temp_c:.1f} C", "info"))
+            else:
+                lines.append((f"{prefix}Temperature: unavailable", "dim"))
+
+            if util_pct is not None:
+                lines.append((f"{prefix}Utilization: {util_pct}%", "info"))
+            else:
+                lines.append((f"{prefix}Utilization: unavailable", "dim"))
+
+        return lines
+
+    @staticmethod
+    def _nvidia_value(value: str, suffix: str = "") -> str:
+        normalized = value.strip()
+        if not normalized:
+            return "n/a"
+        if normalized.lower() in {"n/a", "[n/a]", "not supported"}:
+            return "n/a"
+        return f"{normalized}{suffix}"
+
+    @staticmethod
+    def _parse_nvidia_smi_row(raw_line: str) -> str | None:
+        parts = [part.strip() for part in raw_line.split(",")]
+        if len(parts) != 5:
+            return None
+
+        name, utilization, temp, used, total = parts
+        gpu_text = LinuxBackend._nvidia_value(utilization, "%")
+        temp_text = LinuxBackend._nvidia_value(temp, " C")
+        used_text = LinuxBackend._nvidia_value(used)
+        total_text = LinuxBackend._nvidia_value(total)
+        vram_text = (
+            f"{used_text} / {total_text} MiB"
+            if used_text != "n/a" and total_text != "n/a"
+            else "n/a"
+        )
+        return f"{name}: GPU {gpu_text}  Temp {temp_text}  VRAM {vram_text}"
+
+    @staticmethod
     def _gpu_lines() -> list[OutputLine]:
         nvidia_smi = shutil.which("nvidia-smi")
         if not nvidia_smi:
@@ -754,7 +1084,7 @@ class LinuxBackend(SystemBackend):
         output, error = LinuxBackend._run_command(
             [
                 nvidia_smi,
-                "--query-gpu=name,temperature.gpu,memory.used,memory.total",
+                "--query-gpu=name,utilization.gpu,temperature.gpu,memory.used,memory.total",
                 "--format=csv,noheader,nounits",
             ],
             timeout=4.0,
@@ -764,11 +1094,10 @@ class LinuxBackend(SystemBackend):
 
         lines: list[OutputLine] = []
         for raw_line in output.splitlines():
-            parts = [part.strip() for part in raw_line.split(",")]
-            if len(parts) != 4:
+            formatted = LinuxBackend._parse_nvidia_smi_row(raw_line)
+            if not formatted:
                 continue
-            name, temp, used, total = parts
-            lines.append((f"{name}: {temp} C  VRAM {used} / {total} MiB", "info"))
+            lines.append((formatted, "info"))
         return lines or [("NVIDIA GPU telemetry unavailable.", "dim")]
 
     def _yield_section(self, title: str, entries: list[OutputLine]) -> Iterator[OutputLine]:
@@ -783,8 +1112,8 @@ class LinuxBackend(SystemBackend):
     def available_tools(self) -> set:
         tools = {"diagnostics"}
         from platform_utils import net as _pu_net
-        if _pu_net.netdiscover_available():
-            tools.add("netdiscover")
+        if _pu_net.arp_scan_available():
+            tools.add("arpscan")
         return tools
 
     def admin_required_for(self, tool: str) -> bool:
@@ -828,9 +1157,13 @@ class LinuxBackend(SystemBackend):
 
             sections.append(("MEMORY", self._memory_lines()))
             sections.append(("DISK", self._disk_lines()))
-            sections.append(("NETWORK", self._network_lines()))
+            sections.append(("BATTERY", self._battery_lines()))
+            sections.append(("NETWORK", self._network_lines(stop_event)))
             sections.append(("PROCESSES", self._process_lines()))
             sections.append(("TEMPERATURE", self._temperature_lines()))
+            intel_gpu_lines = self._intel_gpu_lines()
+            if intel_gpu_lines:
+                sections.append(("INTEL GPU", intel_gpu_lines))
             sections.append(("GPU", self._gpu_lines()))
 
             for title, entries in sections:
@@ -857,47 +1190,47 @@ class LinuxBackend(SystemBackend):
     def set_service_startup(self, name: str, startup_type: str, dry: bool) -> tuple:
         raise NotImplementedError("Service changes are not supported on Linux in Phase 8")
 
-    # ── Netdiscover (Linux-only) ──────────────────────────────────────────────
+    # ── ARP Scan (Linux-only) ────────────────────────────────────────────────
 
-    def run_netdiscover(self, stop_event: Event,
-                        interface: str | None = None,
-                        cidr: str | None = None,
-                        passive: bool = False) -> Iterator[OutputLine]:
-        """Kjør netdiscover og yield (linje, tag)-tupler.
+    def run_arp_scan(self, stop_event: Event,
+                     interface: str | None = None,
+                     cidr: str | None = None) -> Iterator[OutputLine]:
+        """Run arp-scan and yield (line, tag) tuples.
 
-        Yielder både info-linjer (header, progress) og data-linjer (per enhet funnet).
-        Data-linjer serialiseres som JSON med tag 'data' så framen kan parse
-        dem og oppdatere tabell-rader. Info-linjer bruker tags 'info'/'warning'/'error'.
+        Yields both info lines (header, progress) and data lines (per device found).
+        Data lines are serialized as JSON with tag 'data' so the frame can parse
+        them and update table rows. Info lines use tags 'info'/'warning'/'error'.
         """
         import json as _json
         from platform_utils import net as _pu_net
 
-        if not _pu_net.netdiscover_available():
-            yield ("netdiscover er ikke installert på systemet.", "error")
-            yield ("Installer med: sudo apt install netdiscover", "info")
+        if not _pu_net.arp_scan_available():
+            yield ("arp-scan is not installed on this system.", "error")
+            yield ("On Ubuntu/Debian: sudo apt install arp-scan", "info")
+            yield ("On Fedora: sudo dnf install arp-scan", "info")
             return
 
-        mode_label = "passiv" if passive else "aktiv"
-        yield (f"Starter netdiscover i {mode_label} modus...", "header")
+        yield ("Starting arp-scan...", "header")
         if interface:
             yield (f"Interface: {interface}", "info")
         if cidr:
-            yield (f"Nettverk: {cidr}", "info")
+            yield (f"Network: {cidr}", "info")
+        else:
+            yield ("Network: local subnet via selected interface", "info")
 
         found_count = 0
-        scan_iter = _pu_net.netdiscover_scan(
+        scan_iter = _pu_net.arp_scan_scan(
             interface=interface,
             cidr=cidr,
-            passive=passive,
             timeout_s=120,
         )
         try:
             for raw_line in scan_iter:
                 if stop_event.is_set():
-                    yield ("Scan avbrutt av bruker.", "warning")
+                    yield ("Scan aborted by user.", "warning")
                     return
 
-                record = _pu_net.parse_netdiscover_line(raw_line)
+                record = _pu_net.parse_arp_scan_line(raw_line)
                 if record is None:
                     continue
 
@@ -909,16 +1242,14 @@ class LinuxBackend(SystemBackend):
             return
         except PermissionError as e:
             yield (str(e), "error")
-            yield (
-                "Tips: Bruk 'Aktiver nå'-knappen når capability-banner er implementert.",
-                "info",
-            )
+            for line in self._arp_scan_capability_fix_lines():
+                yield line
             return
         except subprocess.TimeoutExpired:
-            yield ("Scan timeout — prosess ble terminert.", "warning")
+            yield ("Scan timeout — process was terminated.", "warning")
             return
         except Exception as e:
-            yield (f"Uventet feil under scan: {e}", "error")
+            yield (f"Unexpected error during scan: {e}", "error")
             return
         finally:
             close = getattr(scan_iter, "close", None)
@@ -926,9 +1257,9 @@ class LinuxBackend(SystemBackend):
                 close()
 
         if found_count == 0:
-            yield ("Ingen enheter funnet.", "warning")
+            yield ("No devices found.", "warning")
         else:
-            yield (f"Scan fullført — {found_count} enheter funnet.", "success")
+            yield (f"Scan complete — {found_count} devices found.", "success")
 
 
 # ── Factory ───────────────────────────────────────────────────────────────────

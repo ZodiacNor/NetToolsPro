@@ -5,9 +5,12 @@ All notable changes to NetTools Pro are documented here.
 ## [Unreleased — v1.9.0-dev] - Linux port in progress
 
 ### Added
-- **Linux bootstrap** — `install.sh` installs system packages (apt), creates `.venv`, and installs `requirements.txt` in one command; supports Ubuntu 22.04+ / Debian 12+
+- **Linux bootstrap** — `install.sh` detects `dnf` or `apt`, installs system packages, creates `.venv`, and installs `requirements.txt`; supports Ubuntu/Debian and Fedora
 - `INSTALL-LINUX.md` — concise installation guide for Linux
 - `BaseToolFrame._safe_after()` — thread-safe wrapper around `self.after()` that silently drops scheduling errors (`RuntimeError`, `TclError`) when a widget is destroyed or the event loop is not yet running
+
+### Changed
+- Linux Layer 2 discovery now uses `arp-scan` instead of `netdiscover`
 
 ### Fixed
 - **Linux startup crash: `main thread is not in main loop`** — `ConnectionsFrame._worker` was reading `tk.StringVar.get()` directly from a background thread; value is now snapshotted in the main thread before the worker starts

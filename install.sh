@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # NetTools Pro — Linux bootstrap installer
-# Tested on: Ubuntu 22.04+, Debian 12+
+# Tested on: Ubuntu 22.04+, Debian 12+, Fedora 39+
 # Usage: bash install.sh
 set -e
 
@@ -8,39 +8,75 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$SCRIPT_DIR/.venv"
 REQUIREMENTS="$SCRIPT_DIR/requirements.txt"
 
-# ── OS check ──────────────────────────────────────────────────────────────────
-
-if ! command -v apt-get &>/dev/null; then
-    echo "ERROR: This script requires apt (Ubuntu/Debian). Aborting." >&2
-    exit 1
-fi
-
 echo "============================================"
 echo "  NetTools Pro — Linux Bootstrap"
 echo "============================================"
 echo ""
 
+# ── Detect distro ─────────────────────────────────────────────────────────────
+
+if command -v dnf &>/dev/null; then
+    PKG_MANAGER="dnf"
+elif command -v apt &>/dev/null; then
+    PKG_MANAGER="apt"
+else
+    echo "ERROR: No supported package manager found (dnf or apt). Aborting." >&2
+    exit 1
+fi
+
+echo "[INFO] Detected package manager: $PKG_MANAGER"
+echo ""
+
 # ── System packages ───────────────────────────────────────────────────────────
 
 echo "[1/4] Installing system packages..."
-sudo apt-get update -qq
-sudo apt-get install -y \
-    python3-pip \
-    python3-venv \
-    python3-tk \
-    python3-pil.imagetk \
-    traceroute \
-    net-tools \
-    iproute2 \
-    xdg-utils \
-    netdiscover \
-    nmap
+
+if [ "$PKG_MANAGER" = "dnf" ]; then
+    sudo dnf install -y \
+        python3-tkinter \
+        traceroute \
+        net-tools \
+        arp-scan \
+        iproute \
+        xdg-utils \
+        nmap \
+        lshw \
+        dmidecode
+
+elif [ "$PKG_MANAGER" = "apt" ]; then
+    sudo apt update -qq
+    sudo apt install -y \
+        python3-pip \
+        python3-venv \
+        python3-tk \
+        python3-pil.imagetk \
+        traceroute \
+        net-tools \
+        arp-scan \
+        iproute2 \
+        xdg-utils \
+        nmap \
+        lshw \
+        dmidecode
+fi
+
 echo "      Done."
 echo ""
 
 # ── Virtual environment ───────────────────────────────────────────────────────
 
 echo "[2/4] Creating virtual environment in $VENV_DIR ..."
+if [ -d "$VENV_DIR" ]; then
+    EXISTING_VER=$("$VENV_DIR/bin/python3" --version 2>/dev/null || echo "unknown")
+    SYSTEM_VER=$(python3 --version)
+    if [ "$EXISTING_VER" != "$SYSTEM_VER" ]; then
+        echo "      Existing venv ($EXISTING_VER) does not match system ($SYSTEM_VER)."
+        echo "      Removing and recreating it..."
+        rm -rf "$VENV_DIR"
+    else
+        echo "      Existing venv OK ($EXISTING_VER). Keeping it."
+    fi
+fi
 python3 -m venv "$VENV_DIR"
 echo "      Done."
 echo ""
@@ -55,7 +91,7 @@ echo ""
 # ── Python dependencies ───────────────────────────────────────────────────────
 
 if [ ! -f "$REQUIREMENTS" ]; then
-    echo "ERROR: $REQUIREMENTS not found. Run this script from the project root." >&2
+    echo "ERROR: $REQUIREMENTS not found. Run the script from the project folder." >&2
     exit 1
 fi
 

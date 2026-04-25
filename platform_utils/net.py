@@ -215,56 +215,60 @@ def default_gateway_output() -> str:
         return ""
 
 
-# ── Netdiscover (Linux) ───────────────────────────────────────────────────────
+# ── arp-scan (Linux) ─────────────────────────────────────────────────────────
 
-def netdiscover_available() -> bool:
-    """Returner True hvis netdiscover-binæren er installert og tilgjengelig i PATH."""
-    return shutil.which("netdiscover") is not None
-
-
-def netdiscover_binary() -> str | None:
-    """Returner full sti til netdiscover-binæren, eller None."""
-    return shutil.which("netdiscover")
+def arp_scan_available() -> bool:
+    """Return True if the arp-scan binary is installed and available in PATH."""
+    return shutil.which("arp-scan") is not None
 
 
-def netdiscover_scan(interface: str | None = None,
-                     cidr: str | None = None,
-                     passive: bool = False,
-                     timeout_s: int = 60):
-    """Kjør netdiscover i passiv eller aktiv modus og yield rå linjer.
+def arp_scan_binary() -> str | None:
+    """Return the full path to the arp-scan binary, or None."""
+    return shutil.which("arp-scan")
 
-    Yielder strenger — én per output-linje fra netdiscover. Oppringer er ansvarlig
-    for å parse linjene via parse_netdiscover_line().
 
-    Denne funksjonen krever root eller CAP_NET_RAW + CAP_NET_ADMIN. Feil
-    håndteres ved at funksjonen kaster PermissionError / FileNotFoundError /
-    subprocess.CalledProcessError oppover — caller (backend) transformerer til
-    brukervennlig melding.
+def arp_scan_scan(interface: str | None = None,
+                  cidr: str | None = None,
+                  timeout_s: int = 60):
+    """Run arp-scan and yield raw lines.
+
+    Yields one string per response line from `arp-scan --plain --format=...`.
+    The caller is responsible for parsing lines via parse_arp_scan_line().
+
+    This function requires root or CAP_NET_RAW. Errors are handled by raising
+    PermissionError / FileNotFoundError / subprocess.CalledProcessError upward;
+    the caller (backend) transforms them into user-facing messages.
 
     Args:
-        interface: f.eks. "enp3s0". None → netdiscover auto-velger.
-        cidr: f.eks. "192.168.1.0/24". None → netdiscover auto-oppdager.
-        passive: True = -p (passiv lytting), False = aktiv scan.
-        timeout_s: hard timeout før prosess dreps.
+        interface: e.g. "enp3s0". None -> arp-scan auto-selects.
+        cidr: e.g. "192.168.1.0/24". None -> uses --localnet.
+        timeout_s: hard timeout before the process is killed.
 
     Raises:
-        FileNotFoundError: netdiscover ikke installert.
-        PermissionError: manglende capabilities/root.
-        subprocess.TimeoutExpired: hvis timeout nås og prosess ikke avsluttes rent.
+        FileNotFoundError: arp-scan is not installed.
+        PermissionError: missing capabilities/root.
+        subprocess.TimeoutExpired: if timeout is reached and the process does not exit cleanly.
     """
-    binary = netdiscover_binary()
+    binary = arp_scan_binary()
     if not binary:
         raise FileNotFoundError(
-            "netdiscover er ikke installert. Kjør: sudo apt install netdiscover"
+            "arp-scan is not installed. "
+            "On Ubuntu/Debian: sudo apt install arp-scan. "
+            "On Fedora: sudo dnf install arp-scan."
         )
 
-    cmd = [binary, "-N", "-P", "-L"]
+    cmd = [
+        binary,
+        "--plain",
+        "--ignoredups",
+        "--format=${ip}\\t${mac}\\t${vendor}",
+    ]
     if interface:
-        cmd += ["-i", interface]
+        cmd.append(f"--interface={interface}")
     if cidr:
-        cmd += ["-r", cidr]
-    if passive:
-        cmd += ["-p"]
+        cmd.append(cidr)
+    else:
+        cmd.append("--localnet")
 
     proc = subprocess.Popen(
         cmd,
@@ -284,11 +288,15 @@ def netdiscover_scan(interface: str | None = None,
             stderr_text = ""
             if proc.stderr:
                 stderr_text = proc.stderr.read() or ""
-            if "root" in stderr_text.lower() or "permission" in stderr_text.lower():
+            stderr_lower = stderr_text.lower()
+            if (
+                "root" in stderr_lower
+                or "permission" in stderr_lower
+                or "operation not permitted" in stderr_lower
+                or "cap_net_raw" in stderr_lower
+            ):
                 raise PermissionError(
-                    "netdiscover krever root eller CAP_NET_RAW + CAP_NET_ADMIN. "
-                    "Kjør via pkexec eller sett capabilities med: "
-                    "sudo setcap cap_net_raw,cap_net_admin+eip $(which netdiscover)"
+                    "arp-scan is missing CAP_NET_RAW or root privileges."
                 )
             raise subprocess.CalledProcessError(
                 proc.returncode, cmd, output="", stderr=stderr_text
@@ -306,53 +314,37 @@ def netdiscover_scan(interface: str | None = None,
                 proc.kill()
 
 
-def parse_netdiscover_line(line: str) -> dict | None:
-    """Parse én linje fra netdiscover -P-output til dict, eller None hvis ikke-data.
+def parse_arp_scan_line(line: str) -> dict | None:
+    """Parse one line from arp-scan --plain --format output into a dict.
 
-    Netdiscover -P-format (fixed-width, kan variere med versjon):
-        192.168.1.1     aa:bb:cc:dd:ee:ff      1      60  Some Vendor Name, Inc
-        ----------      -----------------      -      --  ---------------------
-        IP              MAC                  Count  Len  Vendor
-
-    Header- og separatorlinjer returnerer None.
+    Expected format:
+        192.168.1.1\tAA:BB:CC:DD:EE:FF\tVendor Name
 
     Returns:
-        dict med nøkler: ip, mac, count, length, vendor
-        eller None hvis linjen ikke er en data-linje.
+        dict with keys: ip, mac, vendor
+        or None if the line is not a valid data line.
     """
     line = line.strip()
     if not line:
         return None
-    if line.startswith("-") or line.startswith("_"):
-        return None
-    if line.lower().startswith("currently scanning") or "scan complete" in line.lower():
-        return None
-    if "ip " in line.lower() and "mac " in line.lower() and "vendor" in line.lower():
+
+    parts = line.split("\t", 2)
+    if len(parts) < 2:
+        parts = line.split(None, 2)
+    if len(parts) < 2:
         return None
 
-    parts = line.split(None, 4)
-    if len(parts) < 4:
-        return None
-
-    ip = parts[0]
-    mac = parts[1]
+    ip = parts[0].strip()
+    mac = parts[1].strip()
     if ip.count(".") != 3:
         return None
     if mac.count(":") != 5:
         return None
 
-    try:
-        count = int(parts[2])
-        length = int(parts[3])
-    except (ValueError, IndexError):
-        return None
-
-    vendor = parts[4].strip() if len(parts) >= 5 else "Unknown vendor"
+    vendor = parts[2].strip() if len(parts) >= 3 and parts[2].strip() else "Unknown vendor"
 
     return {
         "ip": ip,
         "mac": mac.upper(),
-        "count": count,
-        "length": length,
         "vendor": vendor,
     }
