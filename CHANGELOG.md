@@ -13,6 +13,10 @@ All notable changes to NetTools Pro are documented here.
 - Linux Layer 2 discovery now uses `arp-scan` instead of `netdiscover`
 
 ### Fixed
+- [UI] Fixed missing icons and black glyph squares on Linux
+- [UI] Replaced unstable emoji with safe labels
+- [UI] Styled context menu for dark theme
+- [UI] Fixed context menu not closing on outside click
 - **Linux startup crash: `main thread is not in main loop`** — `ConnectionsFrame._worker` was reading `tk.StringVar.get()` directly from a background thread; value is now snapshotted in the main thread before the worker starts
 - **Linux startup crash: `self.after()` from worker threads** — `InterfacesFrame`, `ConnectionsFrame`, and `ARPFrame` all auto-refresh on init, spawning threads before the Tk mainloop is fully active; all `self.after(0, ...)` calls in these workers replaced with `self._safe_after(0, ...)`
 
@@ -21,6 +25,7 @@ All notable changes to NetTools Pro are documented here.
 - `system_backend.py`: `SystemBackend` ABC, `WindowsBackend` (full), `LinuxBackend` (diagnostics only — fase 8)
 - Linux network wrappers: `ip addr`, `ip neigh`, `ip -4 route show default`, `ss -anop`
 - `build.bat` patched with `py -3` launcher strategy and pip retry loop
+- [BUILD] Improved Linux .bin build stability
 
 ## [1.9.0] - 2026-04-22
 

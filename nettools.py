@@ -93,6 +93,100 @@ APP_COPYRIGHT   = "Copyright (c) 2026 Bengt Simon Røch Dragseth"
 APP_DESCRIPTION = "Network diagnostics and utility toolkit"
 APP_COMPANY     = "Bengt Simon Røch Dragseth"
 
+UNSTABLE_UI_GLYPHS = {
+    "🏓": "PING",
+    "🔍": "Find",
+    "🔎": "Find",
+    "⚡": "Load",
+    "🗺": "Route",
+    "🌐": "Web",
+    "📡": "Net",
+    "🧮": "Subnet",
+    "💡": "WOL",
+    "➕": "Add",
+    "🖧": "Iface",
+    "📊": "Stats",
+    "🔗": "Conn",
+    "🔄": "Refresh",
+    "📋": "Copy",
+    "📷": "Cam",
+    "📺": "Stream",
+    "⚙️": "Cfg",
+    "⚙": "Cfg",
+    "📂": "Folder",
+    "📁": "Folder",
+    "📄": "New",
+    "📝": "Script",
+    "💾": "Save",
+    "🗑": "Clear",
+    "⭐": "Save",
+    "🔬": "Cam",
+    "🕐": "History",
+    "📣": "mDNS",
+    "💻": "CPU",
+    "🧠": "RAM",
+    "📥": "Net In",
+    "📤": "Net Out",
+    "🚪": "Gateway",
+    "⚠": "WARN",
+    "✓": "OK",
+    "✔": "OK",
+    "✗": "ERR",
+    "✘": "NO",
+    "▶": "",
+    "⏹": "",
+    "○": "",
+    "●": "",
+    "↓": "Down",
+    "↑": "Up",
+    "→": "->",
+    "›": ">",
+}
+
+
+def _safe_ui_text(text):
+    """Replace unstable emoji/glyphs before CustomTkinter renders text."""
+    if not isinstance(text, str):
+        return text
+    for glyph, replacement in UNSTABLE_UI_GLYPHS.items():
+        text = text.replace(glyph, replacement)
+
+    cleaned_lines = []
+    for line in text.splitlines():
+        line = re.sub(r"[ \t]+", " ", line).strip()
+        words = line.split(" ")
+        if len(words) >= 2 and words[0].casefold() == words[1].casefold():
+            words = words[1:]
+        cleaned_lines.append(" ".join(words))
+    return "\n".join(cleaned_lines)
+
+
+def _install_safe_ctk_text_wrappers():
+    """Wrap CustomTkinter text widgets so visible labels stay font-safe."""
+    def wrap_class(original):
+        class SafeTextWidget(original):
+            def __init__(self, *args, **kwargs):
+                if "text" in kwargs:
+                    kwargs["text"] = _safe_ui_text(kwargs["text"])
+                super().__init__(*args, **kwargs)
+
+            def configure(self, require_redraw=False, **kwargs):
+                if "text" in kwargs:
+                    kwargs["text"] = _safe_ui_text(kwargs["text"])
+                return super().configure(require_redraw=require_redraw, **kwargs)
+
+            config = configure
+
+        SafeTextWidget.__name__ = original.__name__
+        return SafeTextWidget
+
+    ctk.CTkLabel = wrap_class(ctk.CTkLabel)
+    ctk.CTkButton = wrap_class(ctk.CTkButton)
+    ctk.CTkCheckBox = wrap_class(ctk.CTkCheckBox)
+
+
+_install_safe_ctk_text_wrappers()
+
 COMMON_PORTS = {
     21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP", 53: "DNS",
     80: "HTTP", 110: "POP3", 143: "IMAP", 443: "HTTPS", 445: "SMB",
@@ -601,42 +695,42 @@ def score_camera_breakdown(evidence, reach="unknown", mac_class="unknown"):
 
 SIDEBAR_STRUCTURE = [
     # (type, display_label, key, category_key)
-    ("standalone", "\U0001f3e0  Dashboard",      "dashboard",    None),
+    ("standalone", "Dashboard",      "dashboard",    None),
 
-    ("category",   "\u26a1  Diagnostics",        "cat_diag",     None),
-    ("tool",       "\U0001f3d3  Ping",            "ping",         "cat_diag"),
-    ("tool",       "\U0001f50d  Port Scanner",    "portscan",     "cat_diag"),
-    ("tool",       "\u26a1  Stress Test",         "stress",       "cat_diag"),
-    ("tool",       "\U0001f5fa   Traceroute",     "traceroute",   "cat_diag"),
-    ("tool",       "\U0001f310  DNS Lookup",      "dns",          "cat_diag"),
+    ("category",   "Diagnostics",    "cat_diag",     None),
+    ("tool",       "Ping",           "ping",         "cat_diag"),
+    ("tool",       "Port Scanner",   "portscan",     "cat_diag"),
+    ("tool",       "Stress Test",    "stress",       "cat_diag"),
+    ("tool",       "Traceroute",     "traceroute",   "cat_diag"),
+    ("tool",       "DNS Lookup",     "dns",          "cat_diag"),
 
-    ("category",   "\U0001f52d  Discovery",       "cat_disc",     None),
-    ("tool",       "\U0001f4e1  Net Scanner",     "netscan",      "cat_disc"),
-    ("tool",       "\U0001f4e1  Netdiscover",     "netdiscover",  "cat_disc"),
-    ("tool",       "\U0001f9ee  Subnet Calc",     "subnet",       "cat_disc"),
-    ("tool",       "\U0001f4a1  Wake-on-LAN",     "wol",          "cat_disc"),
-    ("tool",       "\U0001f4cb  ARP Table",       "arp",          "cat_disc"),
-    ("tool",       "\U0001f50e  WHOIS",           "whois",        "cat_disc"),
-    ("tool",       "\U0001f4e3  mDNS Scan",       "mdns",         "cat_disc"),
+    ("category",   "Discovery",      "cat_disc",     None),
+    ("tool",       "Net Scanner",    "netscan",      "cat_disc"),
+    ("tool",       "Netdiscover",    "netdiscover",  "cat_disc"),
+    ("tool",       "Subnet Calc",    "subnet",       "cat_disc"),
+    ("tool",       "Wake-on-LAN",    "wol",          "cat_disc"),
+    ("tool",       "ARP Table",      "arp",          "cat_disc"),
+    ("tool",       "WHOIS",          "whois",        "cat_disc"),
+    ("tool",       "mDNS Scan",      "mdns",         "cat_disc"),
 
-    ("category",   "\U0001f4f7  Camera",          "cat_cam",      None),
-    ("tool",       "\U0001f4f7  Camera Finder",   "camfinder",    "cat_cam"),
-    ("tool",       "\U0001f4fa  Stream Viewer",   "camview",      "cat_cam"),
-    ("tool",       "\U0001f52c  Cam Analysis",    "cam_analysis", "cat_cam"),
+    ("category",   "Camera",         "cat_cam",      None),
+    ("tool",       "Camera Finder",  "camfinder",    "cat_cam"),
+    ("tool",       "Stream Viewer",  "camview",      "cat_cam"),
+    ("tool",       "Cam Analysis",   "cam_analysis", "cat_cam"),
 
-    ("category",   "\U0001f4ca  Monitoring",      "cat_mon",      None),
-    ("tool",       "\U0001f5a7   Interfaces",     "interfaces",   "cat_mon"),
-    ("tool",       "\U0001f4ca  Bandwidth",       "bandwidth",    "cat_mon"),
-    ("tool",       "\U0001f517  Connections",     "connections",  "cat_mon"),
-    ("tool",       "\U0001f4e6  Live Capture",    "livecapture",  "cat_mon"),
+    ("category",   "Monitoring",     "cat_mon",      None),
+    ("tool",       "Interfaces",     "interfaces",   "cat_mon"),
+    ("tool",       "Bandwidth",      "bandwidth",    "cat_mon"),
+    ("tool",       "Connections",    "connections",  "cat_mon"),
+    ("tool",       "Live Capture",   "livecapture",  "cat_mon"),
 
-    ("category",   "\u2699\ufe0f  System",        "cat_sys",      None),
-    ("tool",       "\u2699\ufe0f  System Tools",  "system_tools", "cat_sys"),
-    ("tool",       "\U0001f4dd  Script Lab",      "script_lab",   "cat_sys"),
+    ("category",   "System",         "cat_sys",      None),
+    ("tool",       "System Tools",   "system_tools", "cat_sys"),
+    ("tool",       "Script Lab",     "script_lab",   "cat_sys"),
 
-    ("category",   "\u2b50  My Tools",            "cat_mine",     None),
-    ("tool",       "\U0001f550  History",          "history",      "cat_mine"),
-    ("tool",       "\u2b50  Favorites",           "favorites",    "cat_mine"),
+    ("category",   "My Tools",       "cat_mine",     None),
+    ("tool",       "History",        "history",      "cat_mine"),
+    ("tool",       "Favorites",      "favorites",    "cat_mine"),
 ]
 
 # Flat list for backward compat (cls_map, select_default, etc.)
@@ -1097,6 +1191,67 @@ class BaseToolFrame(ctk.CTkFrame):
         ctk.CTkButton(dlg, text="\u2b50  Save", command=do_save,
                       fg_color="#238636", hover_color="#2ea043",
                       width=120).pack()
+
+    def _attach_entry_context_menu(self, widget):
+        """Attach a dark-themed edit context menu to a Tk/CustomTkinter entry widget."""
+        target = getattr(widget, "_entry", widget)
+        menu = tk.Menu(
+            target,
+            tearoff=0,
+            bg="#1e1e1e",
+            fg="#e6edf3",
+            activebackground="#30363d",
+            activeforeground="#ffffff",
+            bd=1,
+            relief="solid",
+            font=("Consolas", 10),
+        )
+
+        def action(sequence):
+            try:
+                target.event_generate(sequence)
+            except tk.TclError:
+                pass
+
+        def select_all():
+            try:
+                target.select_range(0, "end")
+                target.icursor("end")
+            except tk.TclError:
+                pass
+
+        menu.add_command(label="Cut", command=lambda: action("<<Cut>>"))
+        menu.add_command(label="Copy", command=lambda: action("<<Copy>>"))
+        menu.add_command(label="Paste", command=lambda: action("<<Paste>>"))
+        menu.add_separator()
+        menu.add_command(label="Select All", command=select_all)
+
+        def popup(event):
+            try:
+                target.focus_set()
+                menu.unpost()
+                menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                try:
+                    menu.grab_release()
+                except tk.TclError:
+                    pass
+            return "break"
+
+        def close_menu(_event=None):
+            try:
+                menu.unpost()
+            except tk.TclError:
+                pass
+
+        menu.bind("<FocusOut>", close_menu, add="+")
+        target.winfo_toplevel().bind_all("<Button-1>", close_menu, add="+")
+        target.winfo_toplevel().bind_all("<Escape>", close_menu, add="+")
+
+        for bind_target in {widget, target}:
+            bind_target.bind("<Button-3>", popup, add="+")
+            bind_target.bind("<Control-Button-1>", popup, add="+")
+        return widget
 
     def _safe_after(self, ms, func):
         """Schedule func on the main thread; silently drop if widget is gone or loop not running."""
@@ -2158,7 +2313,7 @@ class DNSFrame(BaseToolFrame):
                         tag = "normal"
                     self.after(0, lambda l=line, tg=tag: self.output.append(l, tg))
             except Exception as e:
-                self.after(0, lambda: self.output.append(f"Error: {e}", "error"))
+                self.after(0, lambda err=str(e): self.output.append(f"Error: {err}", "error"))
 
         SessionHistory.log("DNS Lookup", f"Lookup {domain}", f"Query type: {rtype}")
         self.after(0, lambda: self.output.append("\nDone.", "dim"))
@@ -3283,7 +3438,7 @@ class InterfacesFrame(BaseToolFrame):
                     tag = "normal"
                 self._safe_after(0, lambda l=line, t=tag: self.output.append(l, t))
         except Exception as e:
-            self._safe_after(0, lambda: self.output.append(f"Error: {e}", "error"))
+            self._safe_after(0, lambda err=str(e): self.output.append(f"Error: {err}", "error"))
 
 
 # ==================== Bandwidth Monitor ====================
@@ -3583,7 +3738,7 @@ class ConnectionsFrame(BaseToolFrame):
                         tag = "normal"
                     self._safe_after(0, lambda l=line, t=tag: self.output.append(l, t))
             except Exception as e:
-                self._safe_after(0, lambda: self.output.append(f"Error: {e}", "error"))
+                self._safe_after(0, lambda err=str(e): self.output.append(f"Error: {err}", "error"))
 
 
 # ==================== ARP Table ====================
@@ -3651,7 +3806,7 @@ class ARPFrame(BaseToolFrame):
                     tag = "dim"
                 self._safe_after(0, lambda l=line, t=tag: self.output.append(l, t))
         except Exception as e:
-            self._safe_after(0, lambda: self.output.append(f"Error: {e}", "error"))
+            self._safe_after(0, lambda err=str(e): self.output.append(f"Error: {err}", "error"))
 
 
 # ==================== IP Camera Finder ====================
@@ -4471,6 +4626,34 @@ class CameraFinderFrame(BaseToolFrame):
 
 
 # ==================== Camera Stream Viewer ====================
+class _CameraStreamSlot:
+    """Per-camera state container for CameraViewerFrame."""
+
+    def __init__(self, idx):
+        self.idx = idx
+        self.url = ""
+        self.user = ""
+        self.password = ""
+        self.running = False
+        self.stop_event = threading.Event()
+        self.frame_lock = threading.Lock()
+        self.pending_frame = None
+        self.frame_count = 0
+        self.lost_count = 0
+        self.fps_times = deque(maxlen=30)
+        self.last_image = None
+        self.current_photo = None
+        self.canvas = None
+        self.poll_after_id = None
+        self.card = None
+        self.title_label = None
+        self.url_label = None
+        self.lbl_fps = None
+        self.lbl_res = None
+        self.lbl_frm = None
+        self.lbl_lost = None
+
+
 class CameraViewerFrame(BaseToolFrame):
     """
     Live HTTP/MJPEG stream viewer for IP cameras.
@@ -4480,23 +4663,15 @@ class CameraViewerFrame(BaseToolFrame):
 
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
-        self._current_photo = None     # Keep PhotoImage reference (prevents GC)
-        self._frame_count   = 0
-        self._lost_count    = 0
-        self._stream_url    = ""
-        self._snapshot_img  = None     # Last PIL Image for saving
+        self._slots = [_CameraStreamSlot(i) for i in range(4)]
+        self._active_slot_idx = 0
+        self._fullscreen_slot_idx = None
         self._probe_results = []       # list of (url, stream_type, label, confidence)
         self._all_probe_results = []   # unfiltered copy (includes "failed")
         self._lb_index_map  = []       # listbox row → _probe_results index
         self._vendor_hint   = ""       # vendor from CameraFinder for RTSP ranking
         self._show_all_var  = None     # BooleanVar for "Show all candidates" checkbox
-        self._fps_times = deque(maxlen=30)
-        # Single-slot frame transport: worker deposits latest frame here,
-        # UI poller picks it up.  Prevents self.after() callback queue buildup
-        # that would otherwise hold MB-sized images in lambda closures.
-        self._frame_lock    = threading.Lock()
-        self._pending_frame = None              # (data, "pil"|"jpeg") or None
-        self._poll_after_id = None              # ID from self.after() for poller
+        self._slot_buttons = []
         self._build()
 
     # ── UI ─────────────────────────────────────────────────────────────────
@@ -4524,11 +4699,15 @@ class CameraViewerFrame(BaseToolFrame):
 
         ctk.CTkLabel(row1, text="Camera IP:", text_color="#8b949e").pack(side="left", padx=(0, 5))
         self._ip_var = tk.StringVar(value="192.168.1.")
-        ctk.CTkEntry(row1, textvariable=self._ip_var).pack(side="left", padx=(0, 8), fill="x", expand=True)
+        ip_entry = ctk.CTkEntry(row1, textvariable=self._ip_var)
+        self._attach_entry_context_menu(ip_entry)
+        ip_entry.pack(side="left", padx=(0, 8), fill="x", expand=True)
 
         ctk.CTkLabel(row1, text="Port:", text_color="#8b949e").pack(side="left", padx=(0, 4))
         self._port_var = tk.IntVar(value=80)
-        ctk.CTkEntry(row1, textvariable=self._port_var, width=65).pack(side="left", padx=(0, 8))
+        port_entry = ctk.CTkEntry(row1, textvariable=self._port_var, width=65)
+        self._attach_entry_context_menu(port_entry)
+        port_entry.pack(side="left", padx=(0, 8))
 
         ctk.CTkButton(row1, text="🔍  Probe Streams", command=self._probe_streams,
                       fg_color="#0f3460", hover_color="#1a4a80", width=140).pack(side="left")
@@ -4537,25 +4716,47 @@ class CameraViewerFrame(BaseToolFrame):
         row1b.pack(fill="x", padx=14, pady=(0, 4))
         ctk.CTkLabel(row1b, text="User:", text_color="#8b949e").pack(side="left", padx=(0, 4))
         self._user_var = tk.StringVar(value="admin")
-        ctk.CTkEntry(row1b, textvariable=self._user_var).pack(side="left", padx=(0, 12), fill="x", expand=True)
+        user_entry = ctk.CTkEntry(row1b, textvariable=self._user_var)
+        self._attach_entry_context_menu(user_entry)
+        user_entry.pack(side="left", padx=(0, 12), fill="x", expand=True)
 
         ctk.CTkLabel(row1b, text="Pass:", text_color="#8b949e").pack(side="left", padx=(0, 4))
         self._pass_var = tk.StringVar(value="")
-        ctk.CTkEntry(row1b, textvariable=self._pass_var, show="●").pack(side="left", fill="x", expand=True)
+        pass_entry = ctk.CTkEntry(row1b, textvariable=self._pass_var, show="*")
+        self._attach_entry_context_menu(pass_entry)
+        pass_entry.pack(side="left", fill="x", expand=True)
 
         # Manual URL row
         row2 = ctk.CTkFrame(ctrl, fg_color="transparent")
         row2.pack(fill="x", padx=14, pady=(0, 10))
         ctk.CTkLabel(row2, text="Direct URL:", text_color="#8b949e").pack(side="left", padx=(0, 5))
         self._url_var = tk.StringVar()
-        ctk.CTkEntry(row2, textvariable=self._url_var,
-                     placeholder_text="http://... or rtsp://... — paste any stream URL",
-                     ).pack(side="left", padx=(0, 8), fill="x", expand=True)
+        url_entry = ctk.CTkEntry(
+            row2,
+            textvariable=self._url_var,
+            placeholder_text="http://... or rtsp://... — paste any stream URL",
+        )
+        self._attach_entry_context_menu(url_entry)
+        url_entry.pack(side="left", padx=(0, 8), fill="x", expand=True)
         ctk.CTkButton(row2, text="\u25b6  Connect", command=self._connect_manual,
                       fg_color="#238636", hover_color="#2ea043", width=110).pack(side="left")
         ctk.CTkButton(row2, text="\u2b50  Save URL",
-                      command=lambda: self._save_favorite_dialog("RTSP URL", self._stream_url or self._url_var.get().strip()),
+                      command=lambda: self._save_favorite_dialog("RTSP URL", self._active_slot().url or self._url_var.get().strip()),
                       fg_color="#21262d", hover_color="#30363d", width=90).pack(side="left", padx=(8, 0))
+
+        slot_row = ctk.CTkFrame(ctrl, fg_color="transparent")
+        slot_row.pack(fill="x", padx=14, pady=(0, 10))
+        ctk.CTkLabel(slot_row, text="Target slot:", text_color="#8b949e").pack(side="left", padx=(0, 6))
+        for idx in range(4):
+            btn = ctk.CTkButton(
+                slot_row,
+                text=f"Slot {idx + 1}",
+                width=72,
+                height=26,
+                command=lambda i=idx: self._set_active_slot(i),
+            )
+            btn.pack(side="left", padx=(0, 6))
+            self._slot_buttons.append(btn)
 
         # ── Main split: probe list (left) + canvas (right) ─────────────────
         split = ctk.CTkFrame(self, fg_color="transparent")
@@ -4626,14 +4827,15 @@ class CameraViewerFrame(BaseToolFrame):
                       fg_color="#21262d", hover_color="#30363d", height=30
                       ).pack(fill="x")
 
-        # Right: live canvas
-        right = ctk.CTkFrame(split, fg_color="#161b22", corner_radius=8)
-        right.pack(side="left", fill="both", expand=True, pady=(0, 8))
-
-        self._canvas = tk.Canvas(right, bg="#0d1117",
-                                 highlightthickness=0, relief="flat")
-        self._canvas.pack(fill="both", expand=True, padx=4, pady=4)
-        self._draw_idle_screen()
+        # Right: 4-slot stream wall. Canvases are never destroyed during
+        # fullscreen toggles; they are only re-gridded to preserve stream state.
+        self._wall = ctk.CTkFrame(split, fg_color="transparent")
+        self._wall.pack(side="left", fill="both", expand=True, pady=(0, 8))
+        self._wall.grid_columnconfigure(0, weight=1, uniform="camwall")
+        self._wall.grid_columnconfigure(1, weight=1, uniform="camwall")
+        self._wall.grid_rowconfigure(0, weight=1, uniform="camwall")
+        self._wall.grid_rowconfigure(1, weight=1, uniform="camwall")
+        self._build_stream_slots()
 
         # ── Status bar ────────────────────────────────────────────────────
         status = ctk.CTkFrame(self, fg_color="#161b22", corner_radius=8)
@@ -4660,24 +4862,144 @@ class CameraViewerFrame(BaseToolFrame):
         self._lbl_url = ctk.CTkLabel(srow, text="Not connected",
                                      text_color="#8b949e", font=ctk.CTkFont(size=10))
         self._lbl_url.pack(side="left", padx=(10, 0))
+        self._set_active_slot(0)
+
+    def _build_stream_slots(self):
+        for slot in self._slots:
+            row, col = divmod(slot.idx, 2)
+            card = ctk.CTkFrame(self._wall, fg_color="#161b22", corner_radius=8)
+            card.grid(row=row, column=col, sticky="nsew", padx=4, pady=4)
+            slot.card = card
+
+            top = ctk.CTkFrame(card, fg_color="transparent")
+            top.pack(fill="x", padx=8, pady=(6, 2))
+            slot.title_label = ctk.CTkLabel(
+                top,
+                text=f"Slot {slot.idx + 1}",
+                text_color="#79c0ff",
+                font=ctk.CTkFont(size=12, weight="bold"),
+            )
+            slot.title_label.pack(side="left")
+            slot.url_label = ctk.CTkLabel(
+                top,
+                text="Idle",
+                text_color="#8b949e",
+                font=ctk.CTkFont(size=10),
+            )
+            slot.url_label.pack(side="left", padx=(10, 0), fill="x", expand=True)
+
+            canvas = tk.Canvas(card, bg="#0d1117", highlightthickness=0, relief="flat")
+            canvas.pack(fill="both", expand=True, padx=4, pady=4)
+            canvas.bind("<Button-1>", lambda _event, i=slot.idx: self._toggle_fullscreen_slot(i))
+            slot.canvas = canvas
+
+            stats = ctk.CTkFrame(card, fg_color="transparent")
+            stats.pack(fill="x", padx=8, pady=(0, 6))
+            for label, attr, init in [
+                ("FPS", "lbl_fps", "—"),
+                ("RES", "lbl_res", "—"),
+                ("FRM", "lbl_frm", "0"),
+                ("LOST", "lbl_lost", "0"),
+            ]:
+                cell = ctk.CTkFrame(stats, fg_color="transparent")
+                cell.pack(side="left", expand=True, fill="x")
+                ctk.CTkLabel(cell, text=label, text_color="#8b949e",
+                             font=ctk.CTkFont(size=9)).pack(anchor="w")
+                val = ctk.CTkLabel(cell, text=init, text_color="#f0883e",
+                                   font=ctk.CTkFont(size=11, weight="bold"))
+                val.pack(anchor="w")
+                setattr(slot, attr, val)
+
+            self._draw_idle_screen(slot)
+
+    def _active_slot(self):
+        return self._slots[self._active_slot_idx]
+
+    def _set_active_slot(self, idx):
+        self._active_slot_idx = idx
+        for i, btn in enumerate(self._slot_buttons):
+            if i == idx:
+                btn.configure(fg_color="#238636", hover_color="#2ea043")
+            else:
+                btn.configure(fg_color="#21262d", hover_color="#30363d")
+        self._refresh_active_status()
+
+    def _refresh_active_status(self):
+        slot = self._active_slot()
+        if hasattr(self, "_lbl_fps"):
+            self._lbl_fps.configure(text=slot.lbl_fps.cget("text") if slot.lbl_fps else "—")
+            self._lbl_res.configure(text=slot.lbl_res.cget("text") if slot.lbl_res else "—")
+            self._lbl_frm.configure(text=slot.lbl_frm.cget("text") if slot.lbl_frm else "0")
+            self._lbl_lost.configure(text=slot.lbl_lost.cget("text") if slot.lbl_lost else "0")
+            self._lbl_url.configure(text=slot.url_label.cget("text") if slot.url_label else "Not connected")
+        if hasattr(self, "_stop_stream_btn"):
+            self._stop_stream_btn.configure(state="normal" if slot.running else "disabled")
+        if hasattr(self, "_connect_btn"):
+            self._connect_btn.configure(
+                state="normal" if self._probe_results and not slot.running else "disabled")
+
+    def _toggle_fullscreen_slot(self, idx):
+        self._set_active_slot(idx)
+        if self._fullscreen_slot_idx == idx:
+            self._restore_stream_wall()
+            return
+
+        self._show_fullscreen_slot(idx)
+
+    def _restore_stream_wall(self):
+        self._fullscreen_slot_idx = None
+        for slot in self._slots:
+            slot.card.grid_forget()
+        for slot in self._slots:
+            row, col = divmod(slot.idx, 2)
+            slot.card.grid(
+                row=row,
+                column=col,
+                rowspan=1,
+                columnspan=1,
+                sticky="nsew",
+                padx=4,
+                pady=4,
+            )
+            slot.card.lift()
+        self._wall.update_idletasks()
+        self._refresh_active_status()
+
+    def _show_fullscreen_slot(self, idx):
+        self._fullscreen_slot_idx = idx
+        for slot in self._slots:
+            slot.card.grid_forget()
+        slot = self._slots[idx]
+        slot.card.grid(
+            row=0,
+            column=0,
+            rowspan=2,
+            columnspan=2,
+            sticky="nsew",
+            padx=4,
+            pady=4,
+        )
+        slot.card.lift()
+        self._wall.update_idletasks()
+        self._refresh_active_status()
 
     # ── Idle screen ────────────────────────────────────────────────────────
-    def _draw_idle_screen(self):
-        self._canvas.update_idletasks()
-        w = max(self._canvas.winfo_width(), 400)
-        h = max(self._canvas.winfo_height(), 300)
+    def _draw_idle_screen(self, slot):
+        slot.canvas.update_idletasks()
+        w = max(slot.canvas.winfo_width(), 300)
+        h = max(slot.canvas.winfo_height(), 200)
         cx, cy = w // 2, h // 2
-        self._canvas.delete("all")
-        self._canvas.create_text(cx, cy - 20, text="📷", font=("Segoe UI Emoji", 48),
-                                 fill="#21262d")
-        self._canvas.create_text(cx, cy + 40,
-                                 text="Enter camera IP and click  🔍 Probe Streams\n"
-                                      "or paste a direct URL and click  ▶ Connect",
-                                 font=("Consolas", 11), fill="#8b949e", justify="center")
+        slot.canvas.delete("all")
+        slot.canvas.create_text(cx, cy - 20, text="CAM", font=("Consolas", 24, "bold"),
+                                fill="#21262d")
+        slot.canvas.create_text(cx, cy + 34,
+                                text=f"Slot {slot.idx + 1}",
+                                font=("Consolas", 11), fill="#8b949e", justify="center")
 
     # ── set_target: called from CameraFinderFrame ──────────────────────────
     def set_target(self, ip, port=80, vendor_hint=""):
         """Pre-fill IP/port and automatically start probing."""
+        self._set_active_slot(0)
         self._ip_var.set(ip)
         self._port_var.set(port)
         self._vendor_hint = vendor_hint
@@ -4782,7 +5104,7 @@ class CameraViewerFrame(BaseToolFrame):
                         actual_type = "JPEG"
                     else:
                         actual_type = stype
-                    label = f"✓ {path}  [{actual_type}]"
+                    label = f"OK {path}  [{actual_type}]"
                     found.append((url, actual_type, label, "verified"))
             except Exception:
                 pass
@@ -4807,13 +5129,13 @@ class CameraViewerFrame(BaseToolFrame):
                 alive, server_hdr = self._rtsp_options_check(url, user, pw, timeout=2)
                 if alive:
                     conf = "verified"
-                    tag = "✓ Verified"
+                    tag = "OK Verified"
                 elif vendor_hint and vendor_hint in vendor.lower():
                     conf = "likely"
-                    tag = "● Likely"
+                    tag = "Likely"
                 elif bonus == 2:
                     conf = "likely"
-                    tag = "● Likely"
+                    tag = "Likely"
                 else:
                     conf = "guess"
                     tag = "? Guess"
@@ -4830,7 +5152,7 @@ class CameraViewerFrame(BaseToolFrame):
         conf_order = {"verified": 0, "likely": 1, "guess": 2, "failed": 3}
         rtsp_candidates.sort(key=lambda c: conf_order.get(c[3], 9))
 
-        self.after(0, lambda: self._show_probe_results(
+        self._safe_after(0, lambda: self._show_probe_results(
             ip, port, found, rtsp_candidates, subnet_warning))
 
     def _make_opener(self, user, pw, url):
@@ -4875,8 +5197,8 @@ class CameraViewerFrame(BaseToolFrame):
         if not self._all_probe_results:
             for line in [
                 "  No streams found on this IP/port.", "",
-                "  Try:", "  • Different port (81, 8080, 8081)",
-                "  • Adding credentials", "  • Pasting URL directly below",
+                "  Try:", "  - Different port (81, 8080, 8081)",
+                "  - Adding credentials", "  - Pasting URL directly below",
             ]:
                 self._listbox.insert("end", line)
                 self._lb_index_map.append(-1)
@@ -4890,7 +5212,7 @@ class CameraViewerFrame(BaseToolFrame):
 
         # Show subnet warning if applicable
         if getattr(self, "_subnet_warning", "") and self._subnet_warning:
-            self._listbox.insert("end", f"⚠ {self._subnet_warning}")
+            self._listbox.insert("end", f"WARN {self._subnet_warning}")
             self._lb_index_map.append(-1)
             self._listbox.insert("end", "")
             self._lb_index_map.append(-1)
@@ -4967,7 +5289,7 @@ class CameraViewerFrame(BaseToolFrame):
                 self._listbox.selection_set(idx)
                 break
         self._connect_btn.configure(
-            state="normal" if results else "disabled")
+            state="normal" if results and not self._active_slot().running else "disabled")
 
     def _lb_selected_result(self):
         """Return the probe result for the current listbox selection, or None."""
@@ -4984,7 +5306,8 @@ class CameraViewerFrame(BaseToolFrame):
 
     def _on_list_select(self, _event):
         result = self._lb_selected_result()
-        self._connect_btn.configure(state="normal" if result else "disabled")
+        self._connect_btn.configure(
+            state="normal" if result and not self._active_slot().running else "disabled")
 
     def _toggle_show_all(self):
         """Re-render probe results when the 'Show all candidates' checkbox changes."""
@@ -5014,56 +5337,59 @@ class CameraViewerFrame(BaseToolFrame):
         self._start_stream(url, stype)
 
     def _start_stream(self, url, stype):
-        self._stop_stream()          # stop any running stream
-        self.running = True
-        self.stop_event.clear()
-        self._stream_url = url
-        self._frame_count = 0
-        self._lost_count  = 0
-        self._fps_times.clear()
-        # Clear stale frame and start the UI poller (~30 FPS)
-        with self._frame_lock:
-            self._pending_frame = None
-        self._poll_after_id = self.after(33, self._poll_frame)
+        slot = self._active_slot()
+        self._stop_stream(slot)          # stop any running stream in this slot
+        slot.running = True
+        slot.stop_event.clear()
+        slot.url = url
+        slot.user = self._user_var.get().strip()
+        slot.password = self._pass_var.get()
+        slot.frame_count = 0
+        slot.lost_count = 0
+        slot.fps_times.clear()
+        slot.last_image = None
+        slot.current_photo = None
+        with slot.frame_lock:
+            slot.pending_frame = None
+        slot.poll_after_id = self.after(33, lambda i=slot.idx: self._poll_slot(i))
         label = f"Connecting [{stype}] → {url[:70]}"
-        self._lbl_url.configure(text=label)
-        self._lbl_frm.configure(text="0")
-        self._lbl_lost.configure(text="0")
-        self._lbl_fps.configure(text="—")
-        self._lbl_res.configure(text="—")
+        slot.url_label.configure(text=label)
+        slot.lbl_frm.configure(text="0")
+        slot.lbl_lost.configure(text="0", text_color="#f0883e")
+        slot.lbl_fps.configure(text="—")
+        slot.lbl_res.configure(text="—")
+        self._refresh_active_status()
         self._stop_stream_btn.configure(state="normal")
         self._connect_btn.configure(state="disabled")
-        user = self._user_var.get().strip()
-        pw   = self._pass_var.get()
         if stype == "RTSP":
             threading.Thread(target=self._stream_worker_rtsp,
-                             args=(url, user, pw), daemon=True).start()
+                             args=(slot, url, slot.user, slot.password), daemon=True).start()
         else:
             threading.Thread(target=self._stream_worker,
-                             args=(url, stype, user, pw), daemon=True).start()
+                             args=(slot, url, stype, slot.user, slot.password), daemon=True).start()
 
-    def _stop_stream(self):
-        self.running = False
-        self.stop_event.set()
-        # Cancel UI frame poller
-        if self._poll_after_id is not None:
-            self.after_cancel(self._poll_after_id)
-            self._poll_after_id = None
-        # Release frame memory (keep _snapshot_img for save feature)
-        with self._frame_lock:
-            self._pending_frame = None
-        self._current_photo = None
-        if hasattr(self, "_canvas"):
-            self._canvas.image = None
-        if hasattr(self, "_stop_stream_btn"):
-            self._stop_stream_btn.configure(state="disabled")
-        if hasattr(self, "_connect_btn"):
-            self._connect_btn.configure(state="normal" if self._probe_results else "disabled")
-        if hasattr(self, "_lbl_url"):
-            self._lbl_url.configure(text="Stopped")
+    def _stop_stream(self, slot=None):
+        slot = slot or self._active_slot()
+        slot.running = False
+        slot.stop_event.set()
+        if slot.poll_after_id is not None:
+            try:
+                self.after_cancel(slot.poll_after_id)
+            except Exception:
+                pass
+            slot.poll_after_id = None
+        with slot.frame_lock:
+            slot.pending_frame = None
+        slot.current_photo = None
+        if slot.canvas is not None:
+            slot.canvas.image = None
+        if slot.url_label is not None:
+            slot.url_label.configure(text="Stopped")
+        if slot.idx == self._active_slot_idx:
+            self._refresh_active_status()
 
     # ── Stream worker (background thread) ─────────────────────────────────
-    def _stream_worker(self, url, stype, user, pw):
+    def _stream_worker(self, slot, url, stype, user, pw):
         resp = None
         try:
             opener = self._make_opener(user, pw, url)
@@ -5071,18 +5397,18 @@ class CameraViewerFrame(BaseToolFrame):
             req.add_header("User-Agent", "NetToolsPro/1.0")
             resp = opener.open(req, timeout=10)
             ct   = resp.headers.get("Content-Type", "").lower()
-            self.after(0, lambda: self._lbl_url.configure(text=f"▶  {url}"))
+            self._safe_after(0, lambda: self._set_slot_url(slot, f"▶  {url}"))
 
             if "multipart" in ct or "mjpeg" in ct:
-                self._read_mjpeg(resp)
+                self._read_mjpeg(slot, resp)
             else:
                 # Treat as single-JPEG / refreshing snapshot
-                self._read_jpeg_loop(resp, opener, url)
+                self._read_jpeg_loop(slot, resp, opener, url)
 
         except Exception as e:
-            self.after(0, lambda err=str(e): (
-                self._lbl_url.configure(text=f"✗  Error: {err}"),
-                self._draw_error(err),
+            self._safe_after(0, lambda err=str(e): (
+                self._set_slot_url(slot, f"✗  Error: {err}"),
+                self._draw_error(slot, err),
             ))
         finally:
             # Always close the connection to release socket resources
@@ -5091,30 +5417,22 @@ class CameraViewerFrame(BaseToolFrame):
                     resp.close()
             except Exception:
                 pass
-            self.running = False
-            self.after(0, lambda: (
-                self._stop_stream_btn.configure(state="disabled"),
-                self._connect_btn.configure(state="normal" if self._probe_results else "disabled"),
-            ))
+            slot.running = False
+            self._safe_after(0, self._refresh_active_status)
 
     # ── RTSP stream worker (cv2) ──────────────────────────────────────────
-    def _stream_worker_rtsp(self, url, user, pw):
+    def _stream_worker_rtsp(self, slot, url, user, pw):
         """Stream RTSP via OpenCV VideoCapture. Requires opencv-python."""
         if not CV2_AVAILABLE:
-            self.after(0, lambda: (
-                self._lbl_url.configure(
-                    text="✗  opencv-python not installed — required for RTSP"),
-                self._draw_error(
+            self._safe_after(0, lambda: (
+                self._set_slot_url(slot, "✗  opencv-python not installed — required for RTSP"),
+                self._draw_error(slot,
                     "RTSP playback requires the opencv-python package.\n\n"
                     "Install it with:\n  pip install opencv-python\n\n"
                     "Then restart NetTools Pro."),
             ))
-            self.running = False
-            self.after(0, lambda: (
-                self._stop_stream_btn.configure(state="disabled"),
-                self._connect_btn.configure(
-                    state="normal" if self._probe_results else "disabled"),
-            ))
+            slot.running = False
+            self._safe_after(0, self._refresh_active_status)
             return
 
         cap = None
@@ -5137,28 +5455,28 @@ class CameraViewerFrame(BaseToolFrame):
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
 
             if not cap.isOpened():
-                self.after(0, lambda: (
-                    self._lbl_url.configure(text="✗  RTSP stream failed to open"),
-                    self._draw_error(
+                self._safe_after(0, lambda: (
+                    self._set_slot_url(slot, "✗  RTSP stream failed to open"),
+                    self._draw_error(slot,
                         "Could not open RTSP stream.\n\n"
                         "Check URL, credentials, and camera status.\n"
                         "Ensure the camera is reachable on this subnet."),
                 ))
                 return
 
-            self.after(0, lambda: self._lbl_url.configure(
-                text=f"▶ RTSP  {url[:75]}"))
+            self._safe_after(0, lambda: self._set_slot_url(
+                slot, f"▶ RTSP  {url[:75]}"))
 
             consecutive_fail = 0
-            while self.running and not self.stop_event.is_set():
+            while slot.running and not slot.stop_event.is_set():
                 ret, frame = cap.read()
                 if not ret:
                     consecutive_fail += 1
                     if consecutive_fail > 60:
-                        self.after(0, lambda: self._lbl_url.configure(
-                            text="✗  RTSP: too many consecutive read failures"))
+                        self._safe_after(0, lambda: self._set_slot_url(
+                            slot, "✗  RTSP: too many consecutive read failures"))
                         break
-                    self.after(0, self._inc_lost)
+                    self._safe_after(0, lambda s=slot: self._inc_lost(s))
                     time.sleep(0.03)
                     continue
                 consecutive_fail = 0
@@ -5166,14 +5484,14 @@ class CameraViewerFrame(BaseToolFrame):
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 img = Image.fromarray(frame_rgb)
                 # Deposit frame in shared slot; UI poller picks up only the latest.
-                with self._frame_lock:
-                    self._pending_frame = (img, "pil")
+                with slot.frame_lock:
+                    slot.pending_frame = (img, "pil")
                 time.sleep(0.016)
 
         except Exception as e:
-            self.after(0, lambda err=str(e): (
-                self._lbl_url.configure(text=f"✗  RTSP Error: {err}"),
-                self._draw_error(f"RTSP Error:\n{err}"),
+            self._safe_after(0, lambda err=str(e): (
+                self._set_slot_url(slot, f"✗  RTSP Error: {err}"),
+                self._draw_error(slot, f"RTSP Error:\n{err}"),
             ))
         finally:
             if cap is not None:
@@ -5181,65 +5499,67 @@ class CameraViewerFrame(BaseToolFrame):
                     cap.release()
                 except Exception:
                     pass
-            self.running = False
-            self.after(0, lambda: (
-                self._stop_stream_btn.configure(state="disabled"),
-                self._connect_btn.configure(
-                    state="normal" if self._probe_results else "disabled"),
-            ))
+            slot.running = False
+            self._safe_after(0, self._refresh_active_status)
 
     # ── Display PIL image directly (avoids re-encode) ─────────────────────
-    def _display_pil_image(self, img):
+    def _display_pil_image(self, slot, img):
         """Display a PIL Image on the canvas. Main-thread only."""
         try:
-            cw = self._canvas.winfo_width()
-            ch = self._canvas.winfo_height()
+            cw = slot.canvas.winfo_width()
+            ch = slot.canvas.winfo_height()
             if cw < 10 or ch < 10:
                 return
             img.thumbnail((cw, ch), Image.LANCZOS)
             photo = ImageTk.PhotoImage(img)
-            self._canvas.delete("all")
-            self._canvas.create_image(cw // 2, ch // 2,
-                                      image=photo, anchor="center")
-            self._canvas.image = photo
-            self._current_photo = photo
-            self._snapshot_img  = img
+            slot.canvas.delete("all")
+            slot.canvas.create_image(cw // 2, ch // 2,
+                                     image=photo, anchor="center")
+            slot.canvas.image = photo
+            slot.current_photo = photo
+            slot.last_image = img
 
-            self._frame_count += 1
+            slot.frame_count += 1
             now = time.time()
-            self._fps_times.append(now)
-            self._lbl_frm.configure(text=f"{self._frame_count:,}")
-            self._lbl_res.configure(text=f"{img.width}×{img.height}")
-            if self._frame_count % 10 == 0 and len(self._fps_times) >= 2:
-                span = self._fps_times[-1] - self._fps_times[0]
-                fps  = len(self._fps_times) / span if span > 0 else 0
-                self._lbl_fps.configure(text=f"{fps:.1f}")
+            slot.fps_times.append(now)
+            slot.lbl_frm.configure(text=f"{slot.frame_count:,}")
+            slot.lbl_res.configure(text=f"{img.width}×{img.height}")
+            if slot.frame_count % 10 == 0 and len(slot.fps_times) >= 2:
+                span = slot.fps_times[-1] - slot.fps_times[0]
+                fps  = len(slot.fps_times) / span if span > 0 else 0
+                slot.lbl_fps.configure(text=f"{fps:.1f}")
+            if slot.idx == self._active_slot_idx:
+                self._refresh_active_status()
         except Exception:
-            self._lost_count += 1
-            self._lbl_lost.configure(text=str(self._lost_count),
-                                     text_color="#f85149")
+            slot.lost_count += 1
+            slot.lbl_lost.configure(text=str(slot.lost_count),
+                                    text_color="#f85149")
+            if slot.idx == self._active_slot_idx:
+                self._refresh_active_status()
 
-    def _poll_frame(self):
+    def _poll_slot(self, idx):
         """UI-thread poller: grabs the latest frame from the shared slot.
         Only one frame is ever pending — prevents callback queue buildup
         that would otherwise hold MB-sized PIL Images in lambda closures."""
-        if not self.running:
+        slot = self._slots[idx]
+        if not slot.running:
+            slot.poll_after_id = None
             return
-        with self._frame_lock:
-            pending = self._pending_frame
-            self._pending_frame = None
+        with slot.frame_lock:
+            pending = slot.pending_frame
+            slot.pending_frame = None
         if pending is not None:
             data, kind = pending
             if kind == "pil":
-                self._display_pil_image(data)
+                self._display_pil_image(slot, data)
             else:
-                self._display_frame(data)
-        self._poll_after_id = self.after(33, self._poll_frame)
+                self._display_frame(slot, data)
+        slot.poll_after_id = self.after(33, lambda i=idx: self._poll_slot(i))
 
-    def _read_mjpeg(self, resp):
+    def _read_mjpeg(self, slot, resp):
         """Parse multipart MJPEG stream using raw JPEG SOI/EOI markers."""
         buf = b""
-        while self.running and not self.stop_event.is_set():
+        while slot.running and not slot.stop_event.is_set():
             try:
                 chunk = resp.read(32768)
             except Exception:
@@ -5260,24 +5580,24 @@ class CameraViewerFrame(BaseToolFrame):
                     break
                 jpeg = buf[soi: eoi + 2]
                 buf  = buf[eoi + 2:]
-                with self._frame_lock:
-                    self._pending_frame = (jpeg, "jpeg")
+                with slot.frame_lock:
+                    slot.pending_frame = (jpeg, "jpeg")
 
-    def _read_jpeg_loop(self, first_resp, opener, url):
+    def _read_jpeg_loop(self, slot, first_resp, opener, url):
         """Continuously refresh a single-frame JPEG (snapshot polling)."""
         # Display the first response
         try:
             data = first_resp.read()
             if data:
-                with self._frame_lock:
-                    self._pending_frame = (data, "jpeg")
+                with slot.frame_lock:
+                    slot.pending_frame = (data, "jpeg")
         except Exception:
             pass
 
         # Poll every second
-        while self.running and not self.stop_event.is_set():
+        while slot.running and not slot.stop_event.is_set():
             time.sleep(1)
-            if self.stop_event.is_set():
+            if slot.stop_event.is_set():
                 break
             try:
                 req = urllib.request.Request(url)
@@ -5286,24 +5606,26 @@ class CameraViewerFrame(BaseToolFrame):
                 with opener.open(req, timeout=5) as resp:
                     data = resp.read()
                 if data:
-                    with self._frame_lock:
-                        self._pending_frame = (data, "jpeg")
+                    with slot.frame_lock:
+                        slot.pending_frame = (data, "jpeg")
             except Exception:
-                self.after(0, self._inc_lost)
+                self._safe_after(0, lambda s=slot: self._inc_lost(s))
 
     # ── Frame display (main thread) ────────────────────────────────────────
-    def _inc_lost(self):
+    def _inc_lost(self, slot):
         """Increment lost-frame counter — must be called on the main thread."""
-        self._lost_count += 1
-        self._lbl_lost.configure(text=str(self._lost_count), text_color="#f85149")
+        slot.lost_count += 1
+        slot.lbl_lost.configure(text=str(slot.lost_count), text_color="#f85149")
+        if slot.idx == self._active_slot_idx:
+            self._refresh_active_status()
 
-    def _display_frame(self, jpeg_bytes):
+    def _display_frame(self, slot, jpeg_bytes):
         try:
             img = Image.open(_io.BytesIO(jpeg_bytes))
             img.load()
 
-            cw = self._canvas.winfo_width()
-            ch = self._canvas.winfo_height()
+            cw = slot.canvas.winfo_width()
+            ch = slot.canvas.winfo_height()
             if cw < 10 or ch < 10:
                 return
 
@@ -5311,50 +5633,61 @@ class CameraViewerFrame(BaseToolFrame):
             img.thumbnail((cw, ch), Image.LANCZOS)
 
             photo = ImageTk.PhotoImage(img)
-            self._canvas.delete("all")
-            self._canvas.create_image(cw // 2, ch // 2,
-                                      image=photo, anchor="center")
-            self._canvas.image = photo      # Prevent garbage collection
-            self._current_photo = photo
-            self._snapshot_img  = img       # Keep for saving
+            slot.canvas.delete("all")
+            slot.canvas.create_image(cw // 2, ch // 2,
+                                     image=photo, anchor="center")
+            slot.canvas.image = photo       # Prevent garbage collection
+            slot.current_photo = photo
+            slot.last_image = img           # Keep for saving
 
             # Stats
-            self._frame_count += 1
+            slot.frame_count += 1
             now = time.time()
-            self._fps_times.append(now)
-            self._lbl_frm.configure(text=f"{self._frame_count:,}")
-            self._lbl_res.configure(text=f"{img.width}×{img.height}")
+            slot.fps_times.append(now)
+            slot.lbl_frm.configure(text=f"{slot.frame_count:,}")
+            slot.lbl_res.configure(text=f"{img.width}×{img.height}")
 
-            if self._frame_count % 10 == 0 and len(self._fps_times) >= 2:
-                span = self._fps_times[-1] - self._fps_times[0]
-                fps  = len(self._fps_times) / span if span > 0 else 0
-                self._lbl_fps.configure(text=f"{fps:.1f}")
+            if slot.frame_count % 10 == 0 and len(slot.fps_times) >= 2:
+                span = slot.fps_times[-1] - slot.fps_times[0]
+                fps  = len(slot.fps_times) / span if span > 0 else 0
+                slot.lbl_fps.configure(text=f"{fps:.1f}")
+            if slot.idx == self._active_slot_idx:
+                self._refresh_active_status()
 
         except Exception:
-            self._lost_count += 1
-            self._lbl_lost.configure(text=str(self._lost_count),
-                                     text_color="#f85149")
+            slot.lost_count += 1
+            slot.lbl_lost.configure(text=str(slot.lost_count),
+                                    text_color="#f85149")
+            if slot.idx == self._active_slot_idx:
+                self._refresh_active_status()
 
-    def _draw_error(self, msg):
-        self._canvas.delete("all")
-        w = max(self._canvas.winfo_width(), 400)
-        h = max(self._canvas.winfo_height(), 200)
-        self._canvas.create_text(w // 2, h // 2,
-                                 text=f"✗  Connection failed\n\n{msg}\n\n"
-                                      "Check IP, port, credentials and camera stream URL.",
-                                 font=("Consolas", 11), fill="#f85149",
-                                 justify="center", width=w - 40)
+    def _set_slot_url(self, slot, text):
+        slot.url_label.configure(text=text)
+        if slot.idx == self._active_slot_idx:
+            self._lbl_url.configure(text=text)
+
+    def _draw_error(self, slot, msg):
+        slot.canvas.delete("all")
+        w = max(slot.canvas.winfo_width(), 400)
+        h = max(slot.canvas.winfo_height(), 200)
+        slot.canvas.create_text(w // 2, h // 2,
+                                text=f"✗  Connection failed\n\n{msg}\n\n"
+                                     "Check IP, port, credentials and camera stream URL.",
+                                font=("Consolas", 11), fill="#f85149",
+                                justify="center", width=w - 40)
 
     # ── Snapshot ───────────────────────────────────────────────────────────
     def _snapshot(self):
         if not PILLOW_AVAILABLE:
             return
-        img = self._snapshot_img
+        slot = self._active_slot()
+        img = slot.last_image
         if img is None:
             messagebox.showinfo("Snapshot", "No frame captured yet.")
             return
         ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
-        ip  = re.sub(r"[^\d.]", "_", self._ip_var.get().strip()) or "camera"
+        ip_source = slot.url or self._ip_var.get().strip()
+        ip  = re.sub(r"[^\d.]", "_", ip_source)[:60] or f"slot_{slot.idx + 1}"
         fn  = filedialog.asksaveasfilename(
             defaultextension=".jpg",
             initialfile=f"snapshot_{ip}_{ts}.jpg",
@@ -5445,10 +5778,9 @@ class Sidebar(ctk.CTkFrame):
                 self._btns[key] = btn
 
             elif type_ == "category":
-                # Extract label without emoji prefix for arrow toggling
                 self._cat_labels[key] = label
                 cat_btn = ctk.CTkButton(
-                    nav, text=f"\u25b6  {label}", anchor="w",
+                    nav, text=f"> {label}", anchor="w",
                     font=ctk.CTkFont(size=12, weight="bold"),
                     fg_color="transparent", hover_color="#21262d",
                     text_color="#8b949e", height=36, corner_radius=6,
@@ -5482,15 +5814,15 @@ class Sidebar(ctk.CTkFrame):
         ctk.CTkLabel(info, text=f"Local IP: {local_ip}",
                      font=ctk.CTkFont(size=10), text_color="#8b949e").pack(anchor="w", padx=12, pady=4)
 
-        # Theme toggle
+        # Theme toggle uses plain ASCII to avoid font fallback artifacts.
         self._theme = SettingsManager.get("theme", "dark")
-        ctk.CTkButton(info, text="\u2600 / \u263e  Toggle Theme", command=self._toggle_theme,
+        ctk.CTkButton(info, text="Toggle Theme", command=self._toggle_theme,
                       fg_color="transparent", hover_color="#21262d",
                       text_color="#8b949e", height=28, font=ctk.CTkFont(size=10)
                       ).pack(fill="x", padx=4, pady=(0, 2))
 
         # About button
-        ctk.CTkButton(info, text="\u2139  About", command=self._show_about,
+        ctk.CTkButton(info, text="i  About", command=self._show_about,
                       fg_color="transparent", hover_color="#21262d",
                       text_color="#8b949e", height=26, font=ctk.CTkFont(size=10)
                       ).pack(fill="x", padx=4, pady=(0, 6))
@@ -5511,7 +5843,7 @@ class Sidebar(ctk.CTkFrame):
         self._cat_frames[cat_key].pack(fill="x", after=self._cat_btns[cat_key])
         lbl = self._cat_labels[cat_key]
         self._cat_btns[cat_key].configure(
-            text=f"\u25bc  {lbl}",
+            text=f"v {lbl}",
             text_color="#c9d1d9",
             fg_color="#161b22",
         )
@@ -5520,7 +5852,7 @@ class Sidebar(ctk.CTkFrame):
         self._cat_frames[cat_key].pack_forget()
         lbl = self._cat_labels[cat_key]
         self._cat_btns[cat_key].configure(
-            text=f"\u25b6  {lbl}",
+            text=f"> {lbl}",
             text_color="#8b949e",
             fg_color="transparent",
         )
@@ -5868,7 +6200,7 @@ class SystemToolsFrame(BaseToolFrame):
         self.q(f"\n{'─' * 55}", "dim")
         self.q(summary, tag)
         self._log(f"FINISH: {summary}")
-        self.after(0, self.ui_done)  # ui_done() resets self.running + button states
+        self._safe_after(0, self.ui_done)  # ui_done() resets self.running + button states
 
     # ── Pre-debloat auto-backup (synchronous) ────────────────────────────────
 
@@ -6599,7 +6931,7 @@ class ScriptLabFrame(BaseToolFrame):
             self.q(f"Error launching script: {exc}", "error")
         finally:
             self._proc = None
-            self.after(0, self.ui_done)
+            self._safe_after(0, self.ui_done)
 
     # ── Output + admin helpers ────────────────────────────────────────────────
 
