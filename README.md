@@ -1,55 +1,50 @@
 # NetTools Pro
 
-> Cross-platform network diagnostics, camera discovery, stream viewing, and system utility toolkit.
+Cross-platform network diagnostics, camera discovery, stream viewing, and system utility toolkit.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey.svg)
 ![Status](https://img.shields.io/badge/Status-Active-brightgreen.svg)
-
-NetTools Pro is a portable desktop toolkit for network troubleshooting, camera discovery, live stream viewing, system diagnostics, and utility workflows.
-
-It is built with Python and CustomTkinter, with standalone builds available for Windows and Linux.
+![Release](https://img.shields.io/github/v/release/ZodiacNor/NetToolsPro)
 
 ---
 
-## Downloads
+## Overview
 
-Prebuilt standalone binaries are available from the [GitHub Releases](https://github.com/ZodiacNor/NetToolsPro/releases) page.
+NetTools Pro is a portable desktop toolkit for practical network diagnostics, IP camera discovery and live stream viewing, monitoring, and common system utility workflows. It is built with Python and CustomTkinter and runs on both Windows and Linux.
 
-| Platform | Release asset | Notes |
+The application is intended for IT technicians, network administrators, field service work, and lab/diagnostic use. All actions are user-controlled and run locally on the operator's machine.
+
+---
+
+## Latest Release
+
+| Platform | Asset | Notes |
 |---|---|---|
 | Windows x64 | `NetToolsPro-windows-x64.exe` | Portable executable |
 | Linux x86_64 | `NetToolsPro-linux-x86_64.bin` | Portable Linux binary |
 
-### Linux
+Release assets are published on the [GitHub Releases page](https://github.com/ZodiacNor/NetToolsPro/releases).
+
+SHA-256 checksums are included with each release as `SHA256SUMS.txt`.
+
+### Windows usage
+
+Download `NetToolsPro-windows-x64.exe` from the latest release and run it.
+
+Some diagnostics or system-level operations may require Administrator privileges.
+
+### Linux usage
+
+Download `NetToolsPro-linux-x86_64.bin` from the latest release and run it:
 
 ```bash
 chmod +x NetToolsPro-linux-x86_64.bin
 ./NetToolsPro-linux-x86_64.bin
 ```
 
-### Windows
-
-Download and run:
-
-```text
-Run NetToolsPro-windows-x64.exe
-```
-
-Some tools may require Administrator or root privileges depending on the operation.
-
----
-
-## Platform Support
-
-| Platform | Status |
-|---|---|
-| Windows | Supported |
-| Fedora Linux | Supported during current Linux port work |
-| Ubuntu / Debian-style Linux distributions | Supported by `install.sh` package detection |
-
-Linux support is actively improving. Some low-level diagnostics and capture features may depend on distribution packages and local privileges.
+The Linux binary is provided for x86_64 Linux systems. It has been built and tested on Fedora. For other distributions, running from source or rebuilding locally may provide the best compatibility.
 
 ---
 
@@ -69,12 +64,14 @@ Linux support is actively improving. Some low-level diagnostics and capture feat
 ### Camera Discovery & Stream Wall
 
 - IP camera discovery
-- HTTP, RTSP, MJPEG, and JPEG stream support
-- 4-slot Camera Stream Wall
+- RTSP, MJPEG, JPEG, and HTTP camera endpoint support
+- 4-slot Camera Stream Wall for viewing multiple streams simultaneously
 - Camera Finder integration
 - Stream probing and candidate detection
 - Snapshot support
-- Useful for testing local IP cameras and service cameras
+- Fullscreen and restore per slot
+- Per-slot URL and credential input
+- Suitable for local IP camera troubleshooting and service workflows
 
 ### Monitoring
 
@@ -96,26 +93,19 @@ Linux support is actively improving. Some low-level diagnostics and capture feat
 - Run and inspect command/script output
 - Useful for repeatable diagnostics and field troubleshooting
 
-### Cross-platform Build
+---
 
-- PyInstaller-based Windows executable builds
-- PyInstaller-based Linux onefile binary builds
-- Shared codebase with platform-specific wrappers where needed
-- Fedora and Ubuntu/Debian-aware Linux bootstrap script
+## Responsible Use
+
+NetTools Pro is intended for legitimate diagnostics, troubleshooting, learning, and authorized network work.
+
+- Use it only on systems and networks you own or have explicit permission to test.
+- Some features may require Administrator/root privileges depending on platform and operation.
+- All actions are user-initiated; the operator is responsible for how the tool is used.
 
 ---
 
-## Safety and Responsible Use
-
-NetTools Pro is intended for legitimate troubleshooting, diagnostics, learning, and authorized network work.
-
-Use it only on systems and networks you own or have permission to test.
-
-The application is designed around user-controlled actions. It does not automatically modify network or system settings without user action, but some features may require elevated privileges.
-
----
-
-## Run from Source
+## Run from source
 
 ### Linux
 
@@ -132,7 +122,7 @@ pip install -r requirements.txt
 python3 nettools.py
 ```
 
-You can also use the Linux bootstrap script:
+An optional `install.sh` is provided to set up the environment:
 
 ```bash
 bash install.sh
@@ -155,78 +145,73 @@ pip install -r requirements.txt
 python nettools.py
 ```
 
+If the Python Launcher (`py`) is not available, replace `py -3 -m venv .venv` with `python -m venv .venv`.
+
 ---
 
-## Build from Source
+## Build from source
 
-### Linux binary
+### Windows
 
-```bash
-cd NetToolsPro
-source .venv/bin/activate
-
-python3 -m py_compile nettools.py
-pyinstaller --clean -y NetToolsPro.bin.spec
-
-chmod +x dist/NetToolsPro.bin
-```
-
-### Windows executable
-
-In Command Prompt:
-
-```bat
-cd NetToolsPro
-build.bat
-```
-
-In PowerShell:
+PowerShell:
 
 ```powershell
-cd NetToolsPro
 .\build.bat
 ```
 
-Or build directly with PyInstaller:
+Command Prompt:
 
-```powershell
-pyinstaller --clean -y "NetTools Pro.spec"
+```cmd
+build.bat
 ```
 
----
+PowerShell requires the `.\` prefix when running a batch file from the current directory.
 
-## Dependencies
+The build script:
 
-Main Python dependencies include:
+- Detects Python (`py -3` first, falls back to `python`)
+- Creates and uses `.venv`
+- Installs dependencies via `python -m pip`
+- Runs a compile check with `py_compile`
+- Builds the executable with PyInstaller using `NetTools Pro.spec`
+- Copies the resulting artifact to `release\NetToolsPro-windows-x64.exe`
 
-- `customtkinter`
-- `Pillow`
-- `opencv-python-headless`
-- `psutil`
-- `dnspython`
-- `pystray`
+### Linux
 
-Additional system tools may be required for some Linux diagnostics, depending on the distribution and feature used.
+```bash
+source .venv/bin/activate
+python3 -m py_compile nettools.py
+pyinstaller --clean -y NetToolsPro.bin.spec
+chmod +x dist/NetToolsPro.bin
+```
 
+The resulting binary can be copied to `release/NetToolsPro-linux-x86_64.bin`.
+
+## Notes
+
+- The Linux binary has been built and tested on Fedora x86_64. For other distributions, running from source or rebuilding locally may provide the best compatibility.
+- Some network and system tools may require Administrator/root privileges.
 ---
 
 ## Project Structure
 
-```text
+```
 NetToolsPro/
-├── nettools.py              # Main application
-├── platform_utils/          # Platform-specific wrappers/helpers
-├── system_backend.py        # System/backend operations
-├── requirements.txt         # Python dependencies
-├── install.sh               # Linux bootstrap installer
-├── build.bat                # Windows build script
-├── NetToolsPro.bin.spec     # Linux PyInstaller spec
-├── NetTools Pro.spec        # Windows PyInstaller spec
-├── INSTALL-LINUX.md         # Linux setup notes
-├── CHANGELOG.md             # Release history
-├── LICENSE                  # MIT License
+├── nettools.py
+├── platform_utils/
+├── system_backend.py
+├── requirements.txt
+├── install.sh
+├── build.bat
+├── NetToolsPro.bin.spec
+├── NetTools Pro.spec
+├── INSTALL-LINUX.md
+├── CHANGELOG.md
+├── LICENSE
 └── README.md
 ```
+
+The `release/` directory is used as a local output folder for build artifacts and is excluded from version control. Release binaries are distributed via GitHub Releases, not committed to the repository.
 
 ---
 
@@ -238,29 +223,11 @@ Screenshots will be added in a future release.
 
 ## Roadmap
 
-Planned and ongoing work includes:
-
 - Improved Camera Finder to Stream Wall workflow
 - Persistent Stream Wall profiles
-- Better cross-platform diagnostics
-- Expanded Linux support
-- More structured release packaging
-- Additional documentation and screenshots
-
----
-
-## Contributing
-
-Bug reports, feature requests, and pull requests are welcome.
-
-If you want to contribute:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make focused changes
-4. Submit a pull request with a clear description
-
-Please keep changes scoped and avoid mixing unrelated fixes in the same pull request.
+- Broader cross-platform diagnostics coverage
+- Additional screenshots and documentation
+- More structured release cadence
 
 ---
 
@@ -268,12 +235,8 @@ Please keep changes scoped and avoid mixing unrelated fixes in the same pull req
 
 Created by Bengt Simon Røch Dragseth.
 
-NetTools Pro started as a practical field tool for network diagnostics, camera troubleshooting, and system utility workflows.
-
 ---
 
 ## License
 
-MIT License.
-
-See [LICENSE](LICENSE) for details.
+Released under the MIT License. See [LICENSE](LICENSE) for details.
