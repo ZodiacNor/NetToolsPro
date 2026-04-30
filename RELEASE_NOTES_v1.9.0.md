@@ -149,7 +149,7 @@ NetTools Pro is intended for legitimate diagnostics, troubleshooting, learning, 
 SHA-256 checksums are published alongside the release files in `SHA256SUMS.txt`.
 
 ```text
-14658bbc55023f99173fe3247166a9ed1f92ea6b87a3aed7600be00dac776a7b  NetToolsPro-linux-x86_64.bin
+274ab798b6c4630443b3b4428a7379b263e7263e34c58fa1faace43dc8134bb5  NetToolsPro-linux-x86_64.bin
 f50d7ce473896896e86eadb4d147c1085bc36cc3ef84f7f80cc0c82eaa70925d  NetToolsPro-windows-x64.exe
 ```
 
