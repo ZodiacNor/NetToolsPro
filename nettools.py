@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NetTools Pro v1.8.1 - Network Engineering Toolkit
+NetTools Pro v1.9.0 - Network Engineering Toolkit
 A comprehensive, portable network diagnostic and utility toolkit for Windows.
 
 Author:      Bengt Simon Røch Dragseth
@@ -10,7 +10,7 @@ Copyright:   Copyright (c) 2026 Bengt Simon Røch Dragseth
 Repository:  https://github.com/ZodiacNor/NetToolsPro
 """
 
-__version__   = "1.8.1"
+__version__   = "1.9.0"
 __author__    = "Bengt Simon Røch Dragseth"
 __license__   = "MIT"
 __copyright__ = "Copyright (c) 2026 Bengt Simon Røch Dragseth"
@@ -86,7 +86,7 @@ SUBPROCESS_FLAGS = _pu_detect.SUBPROCESS_FLAGS
 
 # ==================== Application Metadata ====================
 APP_NAME        = "NetTools Pro"
-APP_VERSION     = "1.8.1"
+APP_VERSION     = "1.9.0"
 APP_AUTHOR      = "Bengt Simon Røch Dragseth"
 APP_LICENSE     = "MIT"
 APP_COPYRIGHT   = "Copyright (c) 2026 Bengt Simon Røch Dragseth"

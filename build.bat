@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-set "VERSION=1.8.1"
+set "VERSION=1.9.0"
 title NetTools Pro v%VERSION% - Windows Build
 
 cd /d "%~dp0"
