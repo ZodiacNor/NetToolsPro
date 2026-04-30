@@ -11,6 +11,7 @@ All notable changes to NetTools Pro are documented here.
 
 ### Changed
 - Linux Layer 2 discovery now uses `arp-scan` instead of `netdiscover`
+- [DOCS] Modernized README with cross-platform release and build instructions
 
 ### Fixed
 - [UI] Fixed missing icons and black glyph squares on Linux

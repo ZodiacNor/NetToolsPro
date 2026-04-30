@@ -1,226 +1,270 @@
-# 🌐 NetTools Pro
+# NetTools Pro
 
-> **v1.0.0 — Network Engineering Toolkit for Windows**
-> *"Small tools. Big control."*
+> Cross-platform network diagnostics, camera discovery, stream viewing, and system utility toolkit.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-lightgrey.svg)]()
-[![Python](https://img.shields.io/badge/Python-3.10%2B-yellow.svg)]()
-[![Status](https://img.shields.io/badge/Status-Alpha%20%E2%80%93%20First%20Project-orange.svg)]()
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey.svg)
+![Status](https://img.shields.io/badge/Status-Active-brightgreen.svg)
 
----
+NetTools Pro is a portable desktop toolkit for network troubleshooting, camera discovery, live stream viewing, system diagnostics, and utility workflows.
 
-## ⚠️ Honest Disclaimer
-
-This is my **first real software project**. I am a maritime engineer and outdoor enthusiast — not a professional developer.
-
-**What that means:**
-- The code is almost certainly full of bugs
-- Some features may be incomplete or behave unexpectedly
-- Error handling may be inconsistent
-- **Use at your own risk — provided AS IS**
-
-That said — feedback, bug reports, and pull requests are **genuinely very welcome!** 🙏
+It is built with Python and CustomTkinter, with standalone builds available for Windows and Linux.
 
 ---
 
-## 📌 Overview
+## Downloads
 
-NetTools Pro is a portable, all-in-one network diagnostic toolkit designed for:
+Prebuilt standalone binaries are available from the [GitHub Releases](https://github.com/ZodiacNor/NetToolsPro/releases) page.
 
-- 🔧 Troubleshooting networks and connectivity issues
-- 📡 Discovering devices — including IP cameras
-- 🎥 Viewing live streams (RTSP, MJPEG, JPEG)
-- 🛠 Running system diagnostics and scripts
-- 📊 Monitoring connections, bandwidth, and interfaces
+| Platform | Release asset | Notes |
+|---|---|---|
+| Windows x64 | `NetToolsPro-windows-x64.exe` | Portable executable |
+| Linux x86_64 | `NetToolsPro-linux-x86_64.bin` | Portable Linux binary |
 
-Built with **CustomTkinter**, runs as a **standalone executable** with no installation required.
+### Linux
+
+```bash
+chmod +x NetToolsPro-linux-x86_64.bin
+./NetToolsPro-linux-x86_64.bin
+```
+
+### Windows
+
+Download and run:
+
+```text
+Run NetToolsPro-windows-x64.exe
+```
+
+Some tools may require Administrator or root privileges depending on the operation.
 
 ---
 
-## ✨ Features
+## Platform Support
 
-### 🧭 Network Tools
-| Tool | Description |
+| Platform | Status |
 |---|---|
-| Ping | Multi-threaded ping with response time |
-| Port Scanner | Scan open ports on any host |
-| Traceroute | Trace the path to any destination |
-| DNS Lookup | Resolve hostnames and inspect records |
-| Network Scanner | CIDR-based host discovery |
-| ARP Table Viewer | View active ARP cache |
-| Subnet Calculator | Calculate subnets and ranges |
+| Windows | Supported |
+| Fedora Linux | Supported during current Linux port work |
+| Ubuntu / Debian-style Linux distributions | Supported by `install.sh` package detection |
 
-### 📡 Device & Camera Tools
-- IP Camera Finder (ONVIF, SSDP, HTTP, RTSP)
-- Camera candidate analysis from packet captures
-- DHCP inference and ARP-based device detection
-- Subnet mismatch detection with suggested IP config
-- Vendor detection via MAC OUI lookup
-- IP conflict / duplicate address detection
+Linux support is actively improving. Some low-level diagnostics and capture features may depend on distribution packages and local privileges.
 
-### 🎥 Stream Viewer
-- HTTP MJPEG / JPEG stream support
-- Full RTSP playback via OpenCV (H.264)
-- Auto stream probing across HTTP and RTSP
-- One-click connect to detected streams
+---
 
-### 📊 Monitoring
-- Bandwidth monitor per interface
-- Active TCP/UDP connections viewer
-- Network interfaces overview
+## Highlights
 
-### ⚙️ System Tools
-- Safe and aggressive Windows debloat modes
-- System diagnostics (SFC, DISM)
-- Backup and restore system states
+### Network Diagnostics
 
-### 🧪 Script Lab
+- Ping testing
+- Port scanning
+- Traceroute
+- DNS lookup
+- CIDR/network scanning
+- ARP table inspection
+- Subnet calculations
+- Interface overview
+
+### Camera Discovery & Stream Wall
+
+- IP camera discovery
+- HTTP, RTSP, MJPEG, and JPEG stream support
+- 4-slot Camera Stream Wall
+- Camera Finder integration
+- Stream probing and candidate detection
+- Snapshot support
+- Useful for testing local IP cameras and service cameras
+
+### Monitoring
+
+- Interface statistics
+- Bandwidth monitoring
+- Active TCP/UDP connection view
+- System and network status overview
+
+### System Utilities
+
+- System diagnostics
+- Backup/restore helper workflows
+- Windows utility functions
+- Linux-aware command wrappers where supported
+
+### Script Lab
+
 - Built-in script editor
-- Run PowerShell, Python, Batch, and CMD
-- Real-time output logging
+- Run and inspect command/script output
+- Useful for repeatable diagnostics and field troubleshooting
+
+### Cross-platform Build
+
+- PyInstaller-based Windows executable builds
+- PyInstaller-based Linux onefile binary builds
+- Shared codebase with platform-specific wrappers where needed
+- Fedora and Ubuntu/Debian-aware Linux bootstrap script
 
 ---
 
-## 🧠 Smart Features
+## Safety and Responsible Use
 
-- 🔍 Camera detection via DHCP analysis, ARP cache, and RTSP probing
-- 🌐 Subnet mismatch detection with automatic IP config suggestion
-- 🎯 Confidence scoring for detected camera candidates
-- 🚫 Noise filtering — ignores OEM chatter and irrelevant broadcast traffic
-- 📋 Copy-ready commands (RTSP URLs / netsh config)
+NetTools Pro is intended for legitimate troubleshooting, diagnostics, learning, and authorized network work.
+
+Use it only on systems and networks you own or have permission to test.
+
+The application is designed around user-controlled actions. It does not automatically modify network or system settings without user action, but some features may require elevated privileges.
 
 ---
 
-## ⚙️ Installation
+## Run from Source
 
-### 🔹 Option 1 — Portable EXE *(Recommended)*
-
-1. Download the latest release from the [Releases](https://github.com/ZodiacNor/NetToolsPro/releases) page
-2. Run `NetTools Pro.exe`
-3. No installation required ✅
-
-### 🔹 Option 2 — Run from Source
+### Linux
 
 ```bash
 git clone https://github.com/ZodiacNor/NetToolsPro.git
 cd NetToolsPro
+
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip install --upgrade pip
 pip install -r requirements.txt
+
+python3 nettools.py
+```
+
+You can also use the Linux bootstrap script:
+
+```bash
+bash install.sh
+source .venv/bin/activate
+python3 nettools.py
+```
+
+### Windows
+
+```powershell
+git clone https://github.com/ZodiacNor/NetToolsPro.git
+cd NetToolsPro
+
+py -3 -m venv .venv
+.venv\Scripts\activate
+
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+
 python nettools.py
 ```
 
-> Some features (live capture, raw sockets) may require running as **Administrator**.
-
 ---
 
-## 🏗️ Build from Source
+## Build from Source
+
+### Linux binary
 
 ```bash
+cd NetToolsPro
+source .venv/bin/activate
+
+python3 -m py_compile nettools.py
+pyinstaller --clean -y NetToolsPro.bin.spec
+
+chmod +x dist/NetToolsPro.bin
+```
+
+### Windows executable
+
+```bat
+cd NetToolsPro
 build.bat
 ```
 
-Includes PyInstaller packaging, automatic dependency install, OpenCV bundling, and produces a fully portable `.exe` in the `dist/` folder.
+Or build directly with PyInstaller:
 
----
-
-## 📦 Dependencies
-
-| Package | Purpose |
-|---|---|
-| customtkinter | Modern GUI framework |
-| psutil | System and network stats |
-| Pillow | Image handling |
-| dnspython | DNS queries |
-| opencv-python-headless | RTSP stream playback *(optional)* |
-
----
-
-## 🎥 RTSP Support
-
-NetTools Pro supports live RTSP streams via OpenCV — no VLC required.
-
-Common stream URL formats supported:
-```
-rtsp://[camera-ip]:554/Streaming/Channels/1        # Hikvision
-rtsp://[camera-ip]:554/cam/realmonitor?channel=1   # Dahua
-rtsp://[camera-ip]:554/axis-media/media.amp        # Axis
-rtsp://[camera-ip]:554/live.sdp                    # Generic
-rtsp://[camera-ip]:554/stream1                     # Generic
+```powershell
+pyinstaller --clean -y "NetTools Pro.spec"
 ```
 
 ---
 
-## 🛡️ Safety & Philosophy
+## Dependencies
 
-- ❌ No automatic system modifications
-- ❌ No forced network changes
-- ✅ All actions are user-controlled
-- ✅ Designed for ethical and professional use
+Main Python dependencies include:
+
+- `customtkinter`
+- `Pillow`
+- `opencv-python-headless`
+- `psutil`
+- `dnspython`
+- `pystray`
+
+Additional system tools may be required for some Linux diagnostics, depending on the distribution and feature used.
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
-```
+```text
 NetToolsPro/
-├── nettools.py          # Main application
-├── build.bat            # Build script
-├── requirements.txt     # Python dependencies
-├── NetTools_Pro.spec    # PyInstaller spec
-├── version_info.txt     # Windows version metadata
-├── LICENSE              # MIT License
+├── nettools.py              # Main application
+├── platform_utils/          # Platform-specific wrappers/helpers
+├── system_backend.py        # System/backend operations
+├── requirements.txt         # Python dependencies
+├── install.sh               # Linux bootstrap installer
+├── build.bat                # Windows build script
+├── NetToolsPro.bin.spec     # Linux PyInstaller spec
+├── NetTools Pro.spec        # Windows PyInstaller spec
+├── INSTALL-LINUX.md         # Linux setup notes
+├── CHANGELOG.md             # Release history
+├── LICENSE                  # MIT License
 └── README.md
 ```
 
 ---
 
-## 🖥️ Screenshots
+## Screenshots
 
-> *Screenshots coming soon — contributions welcome!*
-
----
-
-## 🚀 Roadmap
-
-- [ ] Full packet capture integration
-- [ ] AI-assisted network diagnostics
-- [ ] Cybersecurity modules
-- [ ] Remote device management
+Screenshots will be added in a future release.
 
 ---
 
-## 🤝 Contributing
+## Roadmap
 
-All contributions are welcome!
+Planned and ongoing work includes:
+
+- Improved Camera Finder to Stream Wall workflow
+- Persistent Stream Wall profiles
+- Better cross-platform diagnostics
+- Expanded Linux support
+- More structured release packaging
+- Additional documentation and screenshots
+
+---
+
+## Contributing
+
+Bug reports, feature requests, and pull requests are welcome.
+
+If you want to contribute:
 
 1. Fork the repository
 2. Create a feature branch
-3. Submit a pull request
+3. Make focused changes
+4. Submit a pull request with a clear description
 
-Bug reports, feature requests, and honest feedback are equally appreciated. I am learning as I go! 😄
-
----
-
-## 👨‍💻 Author
-
-**Bengt Simon Røch Dragseth**
-Maritime engineer, outdoor enthusiast, and amateur developer from Northern Norway.
-
-🔗 [github.com/ZodiacNor](https://github.com/ZodiacNor)
+Please keep changes scoped and avoid mixing unrelated fixes in the same pull request.
 
 ---
 
-## 📄 License
+## Author
 
-MIT License — Copyright (c) 2026 Bengt Simon Røch Dragseth
+Created by Bengt Simon Røch Dragseth.
 
-See [LICENSE](LICENSE) for full details.
+NetTools Pro started as a practical field tool for network diagnostics, camera troubleshooting, and system utility workflows.
 
 ---
 
-## ⭐ Support
+## License
 
-If you find this useful:
-- ⭐ Star the repo
-- 🛠 Share feedback via Issues
-- 🚀 Help improve it with a pull request
+MIT License.
+
+See [LICENSE](LICENSE) for details.
