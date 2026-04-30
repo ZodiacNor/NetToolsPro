@@ -27,6 +27,7 @@ All notable changes to NetTools Pro are documented here.
 - `system_backend.py`: `SystemBackend` ABC, `WindowsBackend` (full), `LinuxBackend` (diagnostics only — fase 8)
 - Linux network wrappers: `ip addr`, `ip neigh`, `ip -4 route show default`, `ss -anop`
 - `build.bat` patched with `py -3` launcher strategy and pip retry loop
+- [LINUX] Fixed unintended KDE/Wayland remote-control permission prompt on startup
 - [BUILD] Improved Linux .bin build stability
 - [BUILD] Synced application version metadata to v1.9.0
 - [BUILD] Updated Windows build script to fall back from py launcher to python

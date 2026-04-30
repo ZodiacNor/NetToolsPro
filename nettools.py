@@ -75,12 +75,6 @@ try:
 except ImportError:
     CV2_AVAILABLE = False
 
-try:
-    import pystray
-    PYSTRAY_AVAILABLE = True
-except ImportError:
-    PYSTRAY_AVAILABLE = False
-
 # Hide console window on Windows when frozen — sourced from platform_utils
 SUBPROCESS_FLAGS = _pu_detect.SUBPROCESS_FLAGS
 
@@ -919,22 +913,35 @@ class SettingsManager:
 
 
 # ==================== Tray Manager ====================
+def _load_pystray():
+    """Load pystray only on Windows to avoid Linux desktop portal prompts."""
+    if not sys.platform.startswith("win"):
+        return None
+    try:
+        import importlib
+        return importlib.import_module("pystray")
+    except ImportError:
+        return None
+
+
 class TrayManager:
     """System tray icon manager using pystray. Windows only."""
 
     def __init__(self, app):
         self._app = app
         self._icon = None
+        self._pystray = None
 
     def setup(self):
-        if not PYSTRAY_AVAILABLE:
+        self._pystray = _load_pystray()
+        if self._pystray is None:
             return
         img = self._create_icon_image()
-        menu = pystray.Menu(
-            pystray.MenuItem("Show", self._on_show, default=True),
-            pystray.MenuItem("Exit", self._on_exit),
+        menu = self._pystray.Menu(
+            self._pystray.MenuItem("Show", self._on_show, default=True),
+            self._pystray.MenuItem("Exit", self._on_exit),
         )
-        self._icon = pystray.Icon(APP_NAME, img, APP_NAME, menu)
+        self._icon = self._pystray.Icon(APP_NAME, img, APP_NAME, menu)
         threading.Thread(target=self._icon.run, daemon=True).start()
 
     def _create_icon_image(self):
@@ -954,6 +961,9 @@ class TrayManager:
     def minimize_to_tray(self):
         if self._icon:
             self._app.withdraw()
+
+    def is_ready(self):
+        return self._icon is not None
 
     def _on_show(self, icon=None, item=None):
         self._app.after(0, self._app.deiconify)
@@ -9322,7 +9332,7 @@ class App(ctk.CTk):
         self.lift()
 
     def _on_close(self):
-        if PYSTRAY_AVAILABLE and SettingsManager.get("minimize_to_tray", True):
+        if self._tray.is_ready() and SettingsManager.get("minimize_to_tray", True):
             self._tray.minimize_to_tray()
         else:
             self._tray.stop()
