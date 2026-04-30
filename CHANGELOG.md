@@ -26,6 +26,7 @@ All notable changes to NetTools Pro are documented here.
 - Linux network wrappers: `ip addr`, `ip neigh`, `ip -4 route show default`, `ss -anop`
 - `build.bat` patched with `py -3` launcher strategy and pip retry loop
 - [BUILD] Improved Linux .bin build stability
+- [REPO] Updated ignore rules for local build, cache, runtime, and agent artifacts
 
 ## [1.9.0] - 2026-04-22
 
