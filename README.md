@@ -18,6 +18,26 @@ The application is intended for IT technicians, network administrators, field se
 
 ---
 
+## Screenshots
+
+### Dashboard
+
+![NetTools Pro dashboard](docs/screenshots/main-dashboard.png)
+
+### Camera Discovery
+
+![NetTools Pro camera finder](docs/screenshots/camera-finder.png)
+
+### Stream Viewer
+
+![NetTools Pro stream viewer](docs/screenshots/stream-viewer.png)
+
+### Traceroute
+
+![NetTools Pro traceroute](docs/screenshots/traceroute.png)
+
+---
+
 ## Latest Release
 
 | Platform | Asset | Notes |
@@ -217,14 +237,6 @@ NetToolsPro/
 ```
 
 The `release/` directory is used as a local output folder for build artifacts and is excluded from version control. Release binaries are distributed via GitHub Releases, not committed to the repository.
-
----
-
-## Screenshots
-
-Screenshots will be added in a future documentation update.
-
----
 
 ## Roadmap
 
