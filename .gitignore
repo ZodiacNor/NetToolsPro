@@ -21,6 +21,9 @@ dist/
 *.spec.bak
 *.spec.tmp
 
+# Local release packages
+release/
+
 # Logs and runtime output
 logs/
 *.log

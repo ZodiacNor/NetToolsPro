@@ -173,9 +173,18 @@ chmod +x dist/NetToolsPro.bin
 
 ### Windows executable
 
+In Command Prompt:
+
 ```bat
 cd NetToolsPro
 build.bat
+```
+
+In PowerShell:
+
+```powershell
+cd NetToolsPro
+.\build.bat
 ```
 
 Or build directly with PyInstaller:
