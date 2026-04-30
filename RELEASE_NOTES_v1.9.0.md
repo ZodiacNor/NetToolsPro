@@ -146,7 +146,7 @@ NetTools Pro is intended for legitimate diagnostics, troubleshooting, learning, 
 
 ## Verification
 
-SHA-256 checksums are provided as a release asset in `SHA256SUMS.txt`.
+SHA-256 checksums are published alongside the release files in `SHA256SUMS.txt`.
 
 ```text
 14658bbc55023f99173fe3247166a9ed1f92ea6b87a3aed7600be00dac776a7b  NetToolsPro-linux-x86_64.bin
