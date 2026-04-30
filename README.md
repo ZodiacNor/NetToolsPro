@@ -200,6 +200,10 @@ NetToolsPro/
 ├── nettools.py
 ├── platform_utils/
 ├── system_backend.py
+├── docs/
+│   ├── screenshots/
+│   ├── skills/
+│   └── windows-scripts/
 ├── requirements.txt
 ├── install.sh
 ├── build.bat
@@ -207,6 +211,7 @@ NetToolsPro/
 ├── NetTools Pro.spec
 ├── INSTALL-LINUX.md
 ├── CHANGELOG.md
+├── RELEASE_NOTES_v1.9.0.md
 ├── LICENSE
 └── README.md
 ```
@@ -217,7 +222,7 @@ The `release/` directory is used as a local output folder for build artifacts an
 
 ## Screenshots
 
-Screenshots will be added in a future release.
+Screenshots will be added in a future documentation update.
 
 ---
 
