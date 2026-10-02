@@ -14,6 +14,8 @@ env/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.test-work/
+.backups/
 
 # Build artifacts
 build/
@@ -35,6 +37,7 @@ tmp/
 .env.*
 *.local
 settings.json
+favorites.json
 settings.local.json
 secrets.json
 
@@ -53,3 +56,7 @@ Thumbs.db
 .codex/
 .claude/
 AGENTS.md
+
+# Local environments and private state
+/.handover.md
+/.learning.md
