@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NetTools Pro v1.9.0 - Network Engineering Toolkit
-A comprehensive, portable network diagnostic and utility toolkit for Windows.
+NetTools Pro v1.10.0 - Network Engineering Toolkit
+A cross-platform network diagnostic and utility toolkit.
 
 Author:      Bengt Simon Røch Dragseth
 License:     MIT License
@@ -10,7 +10,7 @@ Copyright:   Copyright (c) 2026 Bengt Simon Røch Dragseth
 Repository:  https://github.com/ZodiacNor/NetToolsPro
 """
 
-__version__   = "1.9.0"
+__version__   = "1.10.0"
 __author__    = "Bengt Simon Røch Dragseth"
 __license__   = "MIT"
 __copyright__ = "Copyright (c) 2026 Bengt Simon Røch Dragseth"
@@ -40,6 +40,16 @@ import urllib.error
 from urllib.parse import unquote
 from collections import deque
 import system_backend
+from modules.app_storage import (
+    JsonStore, StorageError, data_directory, legacy_paths, valid_favorites, valid_settings,
+)
+from modules.dashboard_stats import SystemSampler
+from modules.tool_search import search_tools
+from modules.bluetooth_scanner import LinuxBlueZBackend, ScanConfig
+from modules.bluetooth_scanner.diagnostics import run_diagnostics as run_bluetooth_diagnostics
+from modules.bluetooth_scanner.exporter import export_csv as export_bluetooth_csv
+from modules.bluetooth_scanner.exporter import export_json as export_bluetooth_json
+from modules.bluetooth_scanner.scanner_core import BluetoothScannerError
 
 # Cross-platform abstraction layer (see platform_utils/)
 from platform_utils import (
@@ -80,7 +90,7 @@ SUBPROCESS_FLAGS = _pu_detect.SUBPROCESS_FLAGS
 
 # ==================== Application Metadata ====================
 APP_NAME        = "NetTools Pro"
-APP_VERSION     = "1.9.0"
+APP_VERSION     = "1.10.0"
 APP_AUTHOR      = "Bengt Simon Røch Dragseth"
 APP_LICENSE     = "MIT"
 APP_COPYRIGHT   = "Copyright (c) 2026 Bengt Simon Røch Dragseth"
@@ -706,6 +716,7 @@ SIDEBAR_STRUCTURE = [
     ("tool",       "ARP Table",      "arp",          "cat_disc"),
     ("tool",       "WHOIS",          "whois",        "cat_disc"),
     ("tool",       "mDNS Scan",      "mdns",         "cat_disc"),
+    ("tool",       "Bluetooth Scanner", "bluetooth", "cat_disc"),
 
     ("category",   "Camera",         "cat_cam",      None),
     ("tool",       "Camera Finder",  "camfinder",    "cat_cam"),
@@ -819,30 +830,32 @@ class SessionHistory:
 
 
 # ==================== Favorites Manager ====================
-FAVORITES_FILE = pathlib.Path(__file__).parent / "favorites.json"
+FAVORITES_FILE = data_directory() / "favorites.json"
 
 
 class FavoritesManager:
     """Persistent favorites store backed by JSON file."""
     _favorites = []
+    _load_error = None
+    _store = JsonStore(FAVORITES_FILE, list, valid_favorites, legacy_paths("favorites.json", __file__))
 
     @classmethod
     def load(cls):
+        cls._load_error = None
         try:
-            if FAVORITES_FILE.exists():
-                cls._favorites = json.loads(FAVORITES_FILE.read_text(encoding="utf-8"))
-        except Exception:
+            cls._favorites = cls._store.load()
+        except StorageError as error:
             cls._favorites = []
+            cls._load_error = str(error)
 
     @classmethod
     def save(cls):
         try:
-            FAVORITES_FILE.write_text(
-                json.dumps(cls._favorites, indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
-        except Exception:
-            pass
+            cls._store.save(cls._favorites)
+            return True
+        except StorageError as error:
+            messagebox.showerror("Favorites not saved", str(error))
+            return False
 
     @classmethod
     def add(cls, name, fav_type, value, notes=""):
@@ -854,13 +867,17 @@ class FavoritesManager:
             "notes": notes,
         }
         cls._favorites.append(entry)
-        cls.save()
+        if not cls.save():
+            cls._favorites.pop()
+            return None
         return entry
 
     @classmethod
     def remove(cls, fav_id):
+        previous = cls._favorites
         cls._favorites = [f for f in cls._favorites if f["id"] != fav_id]
-        cls.save()
+        if not cls.save():
+            cls._favorites = previous
 
     @classmethod
     def get_all(cls):
@@ -872,7 +889,7 @@ class FavoritesManager:
 
 
 # ==================== Settings Manager ====================
-SETTINGS_FILE = pathlib.Path(__file__).parent / "settings.json"
+SETTINGS_FILE = data_directory() / "settings.json"
 
 
 class SettingsManager:
@@ -882,25 +899,26 @@ class SettingsManager:
         "minimize_to_tray": True,
     }
     _settings = {}
+    _load_error = None
+    _store = JsonStore(SETTINGS_FILE, dict, valid_settings, legacy_paths("settings.json", __file__))
 
     @classmethod
     def load(cls):
         cls._settings = dict(cls._defaults)
+        cls._load_error = None
         try:
-            if SETTINGS_FILE.exists():
-                cls._settings.update(json.loads(SETTINGS_FILE.read_text(encoding="utf-8")))
-        except Exception:
-            pass
+            cls._settings.update(cls._store.load())
+        except StorageError as error:
+            cls._load_error = str(error)
 
     @classmethod
     def save(cls):
         try:
-            SETTINGS_FILE.write_text(
-                json.dumps(cls._settings, indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
-        except Exception:
-            pass
+            cls._store.save(cls._settings)
+            return True
+        except StorageError as error:
+            messagebox.showerror("Settings not saved", str(error))
+            return False
 
     @classmethod
     def get(cls, key, default=None):
@@ -966,13 +984,12 @@ class TrayManager:
         return self._icon is not None
 
     def _on_show(self, icon=None, item=None):
-        self._app.after(0, self._app.deiconify)
-        self._app.after(50, self._app.lift)
+        self._app.after(0, self._app._restore_from_tray)
 
     def _on_exit(self, icon=None, item=None):
         if self._icon:
             self._icon.stop()
-        self._app.after(0, self._app.destroy)
+        self._app.after(0, self._app._exit_app)
 
     def stop(self):
         if self._icon:
@@ -1193,7 +1210,8 @@ class BaseToolFrame(ctk.CTkFrame):
 
         def do_save():
             n = name_var.get().strip() or value[:40]
-            FavoritesManager.add(n, fav_type, value)
+            if FavoritesManager.add(n, fav_type, value) is None:
+                return
             dlg.destroy()
             if hasattr(self, "output"):
                 self.output.append(f"\u2b50 Saved favorite: {n}", "success")
@@ -5767,11 +5785,26 @@ class Sidebar(ctk.CTkFrame):
 
         ctk.CTkFrame(self, fg_color="#21262d", height=1).pack(fill="x")
 
+        self._search_var = tk.StringVar()
+        ctk.CTkLabel(self, text="Find a tool  /  Ctrl+K", anchor="w", height=18,
+                     text_color="#8b949e", font=ctk.CTkFont(size=10)
+                     ).pack(fill="x", padx=14, pady=(10, 0))
+        self._search = ctk.CTkEntry(self, textvariable=self._search_var,
+                                    height=34,
+                                    fg_color="#0d1117", border_color="#30363d")
+        self._search.pack(fill="x", padx=12, pady=(2, 6))
+        self._search.bind("<Return>", self._open_search_result)
+        self._search.bind("<Escape>", self._clear_search)
+        self._search_var.trace_add("write", self._filter_tools)
+        self._search_matches = []
+
         # Scrollable navigation area
         nav = ctk.CTkScrollableFrame(self, fg_color="transparent",
                                      scrollbar_button_color="#21262d",
                                      scrollbar_button_hover_color="#30363d")
         nav.pack(fill="both", expand=True, pady=(4, 0))
+        self._nav = nav
+        self._results = None
 
         # Build accordion from SIDEBAR_STRUCTURE
         current_cat_frame = None
@@ -5838,6 +5871,52 @@ class Sidebar(ctk.CTkFrame):
                       ).pack(fill="x", padx=4, pady=(0, 6))
 
     # ---- Accordion logic ----
+
+    def focus_search(self):
+        self._search.focus_set()
+        self._search.select_range(0, "end")
+        return "break"
+
+    def _clear_search(self, event=None):
+        self._search_var.set("")
+        self.focus_set()
+        return "break"
+
+    def _filter_tools(self, *_):
+        query = self._search_var.get().strip()
+        if self._results is not None:
+            self._results.pack_forget()
+            for widget in self._results.winfo_children():
+                widget.destroy()
+        if not query:
+            self._nav.pack(fill="both", expand=True, pady=(4, 0))
+            self._search_matches = []
+            return
+        self._nav.pack_forget()
+        if self._results is None:
+            # Reuse the scroll widget: destroying its inner frame leaves its
+            # outer CTk container alive in CustomTkinter 5.2.x.
+            self._results = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self._results.pack(fill="both", expand=True, pady=(4, 0))
+        self._search_matches = search_tools(query, SIDEBAR_STRUCTURE)
+        if not self._search_matches:
+            ctk.CTkLabel(self._results, text="No matching tools.\nTry a name or category.",
+                         text_color="#8b949e").pack(padx=8, pady=16)
+        for key, label, category in self._search_matches:
+            ctk.CTkButton(self._results, text=label, anchor="w", height=34,
+                          fg_color="#161b22", hover_color="#21262d", text_color="#c9d1d9",
+                          command=lambda k=key: self._choose_search_result(k)).pack(fill="x", padx=4, pady=(6, 0))
+            ctk.CTkLabel(self._results, text=category, anchor="w", height=18,
+                         font=ctk.CTkFont(size=10), text_color="#8b949e").pack(fill="x", padx=12)
+
+    def _open_search_result(self, event=None):
+        if self._search_matches:
+            self._choose_search_result(self._search_matches[0][0])
+        return "break"
+
+    def _choose_search_result(self, key):
+        self._clear_search()
+        self._select(key)
 
     def _toggle_category(self, cat_key):
         if self._expanded_cat == cat_key:
@@ -8164,6 +8243,9 @@ class HistoryFrame(BaseToolFrame):
         self._build()
         SessionHistory.subscribe(lambda: self.after(0, self._refresh))
 
+    def on_show(self):
+        self._refresh()
+
     def _build(self):
         self.make_header("\U0001f550  Session History", "Actions performed this session")
 
@@ -8219,6 +8301,9 @@ class FavoritesFrame(BaseToolFrame):
         super().__init__(parent, **kwargs)
         self._filter = "All"
         self._build()
+
+    def on_show(self):
+        self._refresh_list()
 
     def _build(self):
         self.make_header("\u2b50  Favorites", "Saved targets, URLs and profiles")
@@ -8772,6 +8857,379 @@ class MDNSFrame(BaseToolFrame):
 
 
 # ==================== Live Packet Capture ====================
+class BluetoothScannerFrame(BaseToolFrame):
+    """Fedora/Linux Bluetooth scanner backed by BlueZ system D-Bus."""
+
+    WARNING_TEXT = (
+        "Bluetooth Scanner viser enheter som er synlige via Bluetooth discovery eller som sender BLE advertisements. "
+        "Enheter som ikke annonserer, ikke er discoverable og ikke allerede er kjent for systemet, kan ikke pålitelig "
+        "oppdages. Bruk kun funksjonen på egne systemer eller i miljøer der du har tillatelse."
+    )
+
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, **kwargs)
+        self._backend = LinuxBlueZBackend(app_version=APP_VERSION)
+        self._session_id = None
+        self._devices = {}
+        self._tree_items = {}
+        self._selected_device_id = None
+        self._adapter_map = {}
+        self._build()
+        self._refresh_adapters()
+
+    def _build(self):
+        self.make_header(
+            "Bluetooth Scanner",
+            "Fedora/Linux BlueZ scanner for visible Classic devices, BLE advertisements, and cached known devices",
+        )
+        warning = self.make_card(self)
+        warning.pack(fill="x", padx=20, pady=(0, 8))
+        ctk.CTkLabel(warning, text=self.WARNING_TEXT, text_color="#d29922",
+                     font=ctk.CTkFont(size=11), wraplength=1100,
+                     justify="left").pack(anchor="w", padx=14, pady=10)
+
+        controls = self.make_card(self)
+        controls.pack(fill="x", padx=20, pady=(0, 8))
+        row1 = ctk.CTkFrame(controls, fg_color="transparent")
+        row1.pack(fill="x", padx=14, pady=(12, 5))
+        ctk.CTkLabel(row1, text="Adapter", text_color="#8b949e").pack(side="left", padx=(0, 4))
+        self.adapter_var = tk.StringVar(value="hci0")
+        self.adapter_menu = ctk.CTkOptionMenu(row1, variable=self.adapter_var, values=["hci0"], width=170)
+        self.adapter_menu.pack(side="left", padx=(0, 8))
+        ctk.CTkButton(row1, text="Refresh", command=self._refresh_adapters, width=85,
+                      fg_color="#21262d", hover_color="#30363d").pack(side="left", padx=(0, 14))
+        ctk.CTkLabel(row1, text="Scan mode", text_color="#8b949e").pack(side="left", padx=(0, 4))
+        self.mode_var = tk.StringVar(value="Auto")
+        ctk.CTkOptionMenu(row1, variable=self.mode_var,
+                          values=["Auto", "BLE only", "Classic only", "Known/cached", "Diagnostic mode"],
+                          width=145).pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(row1, text="Duration", text_color="#8b949e").pack(side="left", padx=(0, 4))
+        self.duration_var = tk.StringVar(value="30s")
+        ctk.CTkOptionMenu(row1, variable=self.duration_var,
+                          values=["10s", "30s", "60s", "Continuous"], width=115).pack(side="left", padx=(0, 10))
+
+        row2 = ctk.CTkFrame(controls, fg_color="transparent")
+        row2.pack(fill="x", padx=14, pady=(0, 12))
+        ctk.CTkLabel(row2, text="RSSI threshold", text_color="#8b949e").pack(side="left", padx=(0, 4))
+        self.rssi_var = tk.StringVar(value="")
+        rssi_entry = ctk.CTkEntry(row2, textvariable=self.rssi_var, width=88, placeholder_text="-80")
+        self._attach_entry_context_menu(rssi_entry)
+        rssi_entry.pack(side="left", padx=(0, 10))
+        self.dup_var = tk.BooleanVar(value=True)
+        ctk.CTkCheckBox(row2, text="Duplicate advertisements", variable=self.dup_var).pack(side="left", padx=(0, 10))
+        r = self.make_btn_row(row2, self._start, self._stop_scan, clear_cmd=self._clear_session, start_text="Start scan")
+        r.pack(side="left", padx=(0, 8))
+        ctk.CTkButton(row2, text="Export JSON", command=lambda: self._export("json"), width=105,
+                      fg_color="#21262d", hover_color="#30363d").pack(side="left", padx=(0, 6))
+        ctk.CTkButton(row2, text="Export CSV", command=lambda: self._export("csv"), width=95,
+                      fg_color="#21262d", hover_color="#30363d").pack(side="left")
+
+        self.make_stat_bar(self, [
+            ("Devices", "bt_total"), ("Anonymous BLE", "bt_anon"),
+            ("Random/private", "bt_random"), ("Cached", "bt_cached"),
+            ("Paired", "bt_paired"), ("Status", "bt_status"),
+        ])
+
+        split = ctk.CTkFrame(self, fg_color="transparent")
+        split.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        split.grid_columnconfigure(0, weight=3)
+        split.grid_columnconfigure(1, weight=2)
+        split.grid_rowconfigure(0, weight=1)
+        tree_card = ctk.CTkFrame(split, fg_color="#161b22", corner_radius=8)
+        tree_card.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        style = tk.ttk.Style()
+        style.theme_use("default")
+        style.configure("Bt.Treeview", background="#161b22", foreground="#c9d1d9",
+                        fieldbackground="#161b22", rowheight=25, font=("Consolas", 9), borderwidth=0)
+        style.configure("Bt.Treeview.Heading", background="#21262d", foreground="#79c0ff",
+                        font=("Consolas", 9, "bold"), relief="flat")
+        style.map("Bt.Treeview", background=[("selected", "#264f78")],
+                  foreground=[("selected", "#ffffff")])
+        cols = ("status", "name", "address", "atype", "transport", "rssi", "tx", "first", "last", "seen", "mfg", "services", "paired", "connected", "notes")
+        self._tree = tk.ttk.Treeview(tree_card, columns=cols, show="headings", style="Bt.Treeview", selectmode="browse")
+        for cid, hdr, width in [
+            ("status", "Status/badge", 150), ("name", "Name / Alias", 150),
+            ("address", "Address", 145), ("atype", "Address type", 95),
+            ("transport", "Transport", 80), ("rssi", "RSSI", 55), ("tx", "Tx", 45),
+            ("first", "First seen", 130), ("last", "Last seen", 130), ("seen", "Seen", 55),
+            ("mfg", "Manufacturer", 120), ("services", "Services / UUIDs", 150),
+            ("paired", "Paired", 60), ("connected", "Connected", 75), ("notes", "Notes", 220),
+        ]:
+            self._tree.heading(cid, text=hdr)
+            self._tree.column(cid, width=width, minwidth=45, anchor="w", stretch=cid in {"name", "notes", "services"})
+        vsb = ctk.CTkScrollbar(tree_card, command=self._tree.yview)
+        vsb.pack(side="right", fill="y", padx=(0, 2), pady=2)
+        hsb = ctk.CTkScrollbar(tree_card, command=self._tree.xview, orientation="horizontal")
+        hsb.pack(side="bottom", fill="x", padx=2, pady=(0, 2))
+        self._tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        self._tree.pack(side="left", fill="both", expand=True, padx=(4, 0), pady=(4, 0))
+        self._tree.bind("<<TreeviewSelect>>", self._on_select)
+
+        detail_card = ctk.CTkFrame(split, fg_color="#161b22", corner_radius=8)
+        detail_card.grid(row=0, column=1, sticky="nsew")
+        detail_top = ctk.CTkFrame(detail_card, fg_color="transparent")
+        detail_top.pack(fill="x", padx=8, pady=(8, 2))
+        ctk.CTkLabel(detail_top, text="Device details", font=ctk.CTkFont(size=11, weight="bold"),
+                     text_color="#79c0ff").pack(side="left")
+        ctk.CTkButton(detail_top, text="Copy address", command=self._copy_address, width=110,
+                      fg_color="#21262d", hover_color="#30363d").pack(side="right", padx=4)
+        ctk.CTkButton(detail_top, text="Copy raw JSON", command=self._copy_raw_json, width=120,
+                      fg_color="#21262d", hover_color="#30363d").pack(side="right", padx=4)
+        dsb = ctk.CTkScrollbar(detail_card)
+        dsb.pack(side="right", fill="y", padx=(0, 2), pady=2)
+        self._detail = OutputText(detail_card, yscrollcommand=dsb.set)
+        self._detail.pack(fill="both", expand=True, padx=(4, 0), pady=(0, 4))
+        dsb.configure(command=self._detail.yview)
+        self._detail.append("Select a Bluetooth device to inspect all BlueZ properties.", "dim")
+
+    def _refresh_adapters(self):
+        try:
+            adapters = self._backend.list_adapters()
+            self._adapter_map = {adapter.adapter_id: adapter for adapter in adapters}
+            values = [adapter.adapter_id for adapter in adapters] or ["no-adapter"]
+            self.adapter_menu.configure(values=values)
+            self.adapter_var.set("hci0" if "hci0" in values else values[0])
+            self.bt_status.configure(text="Ready" if adapters else "No adapter", text_color="#3fb950" if adapters else "#f85149")
+        except Exception as e:
+            self._adapter_map = {}
+            self.adapter_menu.configure(values=["no-adapter"])
+            self.adapter_var.set("no-adapter")
+            self.bt_status.configure(text="BlueZ error", text_color="#f85149")
+            self._detail.clear()
+            self._detail.append(f"Adapter refresh failed: {e}", "error")
+
+    def _scan_config(self):
+        mode = self.mode_var.get()
+        transport = {"Auto": "auto", "BLE only": "le", "Classic only": "bredr"}.get(mode, "auto")
+        duration_label = self.duration_var.get()
+        continuous = duration_label == "Continuous"
+        duration = None if continuous else int(duration_label.rstrip("s"))
+        rssi_text = self.rssi_var.get().strip()
+        rssi = None
+        if rssi_text:
+            try:
+                rssi = int(rssi_text)
+            except ValueError:
+                messagebox.showwarning("Input", "RSSI threshold must be an integer, for example -80.")
+                return None
+        adapter_id = self.adapter_var.get()
+        if adapter_id == "no-adapter":
+            adapter_id = None
+        return ScanConfig(adapter_id=adapter_id, transport=transport, duration_seconds=duration,
+                          rssi_threshold=rssi, duplicate_data=bool(self.dup_var.get()),
+                          include_cached=True, include_paired=True, continuous=continuous,
+                          ui_update_interval_ms=250, session_label=mode)
+
+    def _start(self):
+        mode = self.mode_var.get()
+        if mode == "Known/cached":
+            self._load_known_devices()
+            return
+        if mode == "Diagnostic mode":
+            self._run_diagnostics()
+            return
+        config = self._scan_config()
+        if config is None or self.running:
+            return
+        self._clear_session()
+        try:
+            self._session_id = self._backend.start_scan(config, self._on_backend_event)
+        except BluetoothScannerError as e:
+            self._show_error(e.message, e.suggestion)
+            return
+        except Exception as e:
+            self._show_error(str(e))
+            return
+        self.ui_started()
+        self.bt_status.configure(text="Scanning", text_color="#d29922")
+
+    def _stop_scan(self):
+        self.stop_event.set()
+        try:
+            self._backend.stop_scan(self._session_id)
+        except Exception as e:
+            self._show_error(str(e))
+
+    def _on_backend_event(self, event):
+        self._safe_after(0, lambda e=event: self._handle_event(e))
+
+    def _handle_event(self, event):
+        if event.event_type == "scan_session_started":
+            self.bt_status.configure(text="Scanning", text_color="#d29922")
+        elif event.event_type == "scan_session_stopped":
+            self.ui_done()
+            self.bt_status.configure(text="Stopped", text_color="#8b949e")
+            self._update_stats()
+        elif event.event_type == "diagnostic_error":
+            self._show_error(event.message, event.payload.get("suggestion", ""))
+            self.ui_done()
+        elif event.device:
+            self._upsert_device(event.device)
+
+    def _upsert_device(self, device):
+        self._devices[device.id] = device
+        values = self._row_values(device)
+        item_id = self._tree_items.get(device.id)
+        if item_id:
+            self._tree.item(item_id, values=values)
+        else:
+            self._tree_items[device.id] = self._tree.insert("", "end", values=values)
+        self._update_stats()
+        if self._selected_device_id == device.id:
+            self._render_detail(device)
+
+    def _row_values(self, device):
+        badge = ", ".join(device.badges[:2]) or device.classification.replace("_", " ")
+        services = ", ".join(device.uuids[:2]) or ", ".join(device.service_data.keys())
+        return (
+            badge, device.display_name, device.address, device.address_type, device.transport,
+            "" if device.rssi is None else device.rssi,
+            "" if device.tx_power is None else device.tx_power,
+            device.first_seen.strftime("%H:%M:%S"), device.last_seen.strftime("%H:%M:%S"),
+            device.seen_count, ", ".join(device.manufacturer_ids[:3]), services,
+            "yes" if device.paired else "no", "yes" if device.connected else "no",
+            " | ".join(device.notes[:2]),
+        )
+
+    def _update_stats(self):
+        devices = list(self._devices.values())
+        self.bt_total.configure(text=str(len(devices)))
+        self.bt_anon.configure(text=str(sum(1 for d in devices if d.classification == "anonymous_ble")))
+        self.bt_random.configure(text=str(sum(1 for d in devices if d.address_type == "random")))
+        self.bt_cached.configure(text=str(sum(1 for d in devices if d.is_cached_only)))
+        self.bt_paired.configure(text=str(sum(1 for d in devices if d.paired)))
+
+    def _load_known_devices(self):
+        self._clear_session()
+        try:
+            devices = self._backend.get_known_devices(self.adapter_var.get())
+        except Exception as e:
+            self._show_error(str(e))
+            return
+        for device in devices:
+            self._upsert_device(device)
+        self.bt_status.configure(text="Cached", text_color="#79c0ff")
+
+    def _run_diagnostics(self):
+        self._detail.clear()
+        self._detail.append("Bluetooth diagnostic mode", "header")
+        try:
+            report = run_bluetooth_diagnostics(self._backend)
+            for line in report.lines():
+                tag = "warning" if line.startswith("  ") else "info"
+                self._detail.append(line, tag)
+            self.bt_status.configure(text="Diagnostic", text_color="#79c0ff")
+        except Exception as e:
+            self._show_error(str(e))
+
+    def _clear_session(self):
+        if self.running:
+            self._stop_scan()
+        self._devices.clear()
+        self._tree_items.clear()
+        self._selected_device_id = None
+        if hasattr(self, "_tree"):
+            self._tree.delete(*self._tree.get_children())
+        if hasattr(self, "_detail"):
+            self._detail.clear()
+            self._detail.append("Select a Bluetooth device to inspect all BlueZ properties.", "dim")
+        for attr in ("bt_total", "bt_anon", "bt_random", "bt_cached", "bt_paired"):
+            if hasattr(self, attr):
+                getattr(self, attr).configure(text="0")
+
+    def _on_select(self, _event=None):
+        sel = self._tree.selection()
+        if not sel:
+            return
+        for device_id, item_id in self._tree_items.items():
+            if item_id == sel[0]:
+                self._selected_device_id = device_id
+                self._render_detail(self._devices[device_id])
+                return
+
+    def _render_detail(self, device):
+        self._detail.clear()
+        self._detail.append(device.display_name, "header")
+        self._detail.append(f"Classification: {device.classification} ({device.confidence})", "info")
+        self._detail.append(f"Badges: {', '.join(device.badges) or 'none'}", "normal")
+        self._detail.append(f"Address: {device.address} ({device.address_type})", "normal")
+        self._detail.append(f"Transport: {device.transport}", "normal")
+        self._detail.append(f"RSSI / TxPower: {device.rssi} / {device.tx_power}", "normal")
+        self._detail.append(f"Paired / Connected / Trusted: {device.paired} / {device.connected} / {device.trusted}", "normal")
+        self._detail.append(f"Seen: {device.seen_count} time(s), first {device.first_seen}, last {device.last_seen}", "dim")
+        if device.manufacturer_data:
+            self._detail.append("\nManufacturerData:", "header")
+            for key, value in device.manufacturer_data.items():
+                self._detail.append(f"  {key}: {value}", "normal")
+        if device.service_data:
+            self._detail.append("\nServiceData:", "header")
+            for key, value in device.service_data.items():
+                self._detail.append(f"  {key}: {value}", "normal")
+        if device.advertising_data:
+            self._detail.append("\nAdvertisingData:", "header")
+            for key, value in device.advertising_data.items():
+                self._detail.append(f"  AD {key}: {value}", "normal")
+        if device.notes:
+            self._detail.append("\nClassification notes:", "header")
+            for note in device.notes:
+                self._detail.append(f"  - {note}", "warning")
+        self._detail.append("\nRaw BlueZ properties:", "header")
+        self._detail.append(json.dumps(device.raw_bluez_properties, indent=2, sort_keys=True, default=str), "dim")
+
+    def _copy_address(self):
+        device = self._selected_device()
+        if device:
+            self.clipboard_clear()
+            self.clipboard_append(device.address)
+
+    def _copy_raw_json(self):
+        device = self._selected_device()
+        if device:
+            self.clipboard_clear()
+            self.clipboard_append(json.dumps(device.to_dict(include_raw=True), indent=2, sort_keys=True, default=str))
+
+    def _selected_device(self):
+        return self._devices.get(self._selected_device_id) if self._selected_device_id else None
+
+    def _export(self, fmt):
+        devices = list(self._devices.values())
+        if not devices:
+            messagebox.showinfo("Export", "No Bluetooth devices to export.")
+            return
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        ext = ".csv" if fmt == "csv" else ".json"
+        path = filedialog.asksaveasfilename(defaultextension=ext,
+                                            filetypes=[("CSV", "*.csv"), ("JSON", "*.json"), ("All files", "*.*")],
+                                            initialfile=f"bluetooth_scan_{ts}{ext}")
+        if not path:
+            return
+        config = self._scan_config() or ScanConfig(adapter_id=self.adapter_var.get())
+        content = export_bluetooth_csv(devices) if fmt == "csv" else export_bluetooth_json(
+            app_version=APP_VERSION, scan_config=config, started_at=None,
+            stopped_at=datetime.now().astimezone(), devices=devices)
+        try:
+            with open(path, "w", encoding="utf-8", newline="") as f:
+                f.write(content)
+            self.bt_status.configure(text="Exported", text_color="#3fb950")
+        except Exception as e:
+            self._show_error(f"Export failed: {e}")
+
+    def _show_error(self, message, suggestion=""):
+        self.bt_status.configure(text="Error", text_color="#f85149")
+        self._detail.clear()
+        self._detail.append(message, "error")
+        if suggestion:
+            self._detail.append(suggestion, "warning")
+
+    def on_hide(self):
+        if self.running:
+            self._stop_scan()
+
+    def on_app_close(self):
+        self.on_hide()
+
+
+# ==================== Live Packet Capture ====================
 class LiveCaptureFrame(BaseToolFrame):
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
@@ -9071,188 +9529,186 @@ class LiveCaptureFrame(BaseToolFrame):
 
 # ==================== Dashboard ====================
 class DashboardFrame(ctk.CTkFrame):
-    """Live system stats dashboard — default start page."""
+    """Read-only overview; sampling never blocks Tk or starts a network scan."""
 
     def __init__(self, parent, **kwargs):
         super().__init__(parent, fg_color="#0d1117", corner_radius=0, **kwargs)
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
-        self.grid_rowconfigure(2, weight=0)
-
         self._stat_labels = {}
-        self._gateway_cache = None
+        self._bars = {}
+        self._active = threading.Event()
+        self._stopped = threading.Event()
+        self._samples = queue.Queue(maxsize=1)
+        self._worker_thread = None
+        self._poll_id = None
         self._build()
-        self.after(500, self._refresh)
 
-    # ---- layout ----
     def _build(self):
-        # Row 0: Header
-        hdr = ctk.CTkFrame(self, fg_color="#161b22", corner_radius=8)
-        hdr.grid(row=0, column=0, sticky="ew", padx=20, pady=(20, 10))
-        ctk.CTkLabel(hdr, text=f"{APP_NAME}",
-                     font=ctk.CTkFont(size=24, weight="bold"),
-                     text_color="#79c0ff").pack(side="left", padx=20, pady=14)
-        ctk.CTkLabel(hdr, text=f"v{APP_VERSION}",
-                     font=ctk.CTkFont(size=12),
-                     text_color="#8b949e").pack(side="left", padx=(0, 12), pady=14)
-        ctk.CTkLabel(hdr, text="Network Engineering Toolkit",
-                     font=ctk.CTkFont(size=13),
-                     text_color="#8b949e").pack(side="left", pady=14)
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.grid(row=0, column=0, sticky="ew", padx=26, pady=(24, 12))
+        ctk.CTkLabel(header, text="Network overview", text_color="#f0f6fc",
+                     font=ctk.CTkFont(size=26, weight="bold")).pack(anchor="w")
+        ctk.CTkLabel(header, text="Your local workspace. Choose a tool when you are ready.",
+                     text_color="#8b949e", font=ctk.CTkFont(size=12)).pack(anchor="w")
 
-        # Row 1: Stat cards grid
         cards = ctk.CTkFrame(self, fg_color="transparent")
-        cards.grid(row=1, column=0, sticky="nsew", padx=20, pady=5)
-        for c in range(4):
-            cards.grid_columnconfigure(c, weight=1)
-        cards.grid_rowconfigure(0, weight=1)
-        cards.grid_rowconfigure(1, weight=1)
-
-        card_defs = [
-            ("💻  CPU Usage",        0, 0),
-            ("🧠  RAM Usage",        0, 1),
-            ("💾  Disk Usage",       0, 2),
-            ("📥  Network In",       0, 3),
-            ("📤  Network Out",      1, 0),
-            ("🔗  Active Conns",     1, 1),
-            ("🌐  Local IP",         1, 2),
-            ("🚪  Gateway",          1, 3),
+        cards.grid(row=1, column=0, sticky="nsew", padx=20)
+        for column in range(4):
+            cards.grid_columnconfigure(column, weight=1, uniform="metric")
+        for row in range(2):
+            cards.grid_rowconfigure(row, weight=1)
+        definitions = [
+            ("CPU Usage", "PROCESSOR"), ("RAM Usage", "MEMORY"),
+            ("Disk Usage", "SYSTEM DISK"), ("Active Conns", "CONNECTIONS"),
+            ("Network In", "DOWNLOAD"), ("Network Out", "UPLOAD"),
+            ("Local IP", "LOCAL ADDRESS"), ("Gateway", "DEFAULT GATEWAY"),
         ]
-        for title, row, col in card_defs:
-            val_lbl, sub_lbl = self._build_card(cards, title, row, col)
-            key = title.split("  ", 1)[1].strip()
-            self._stat_labels[key] = (val_lbl, sub_lbl)
+        for index, (key, title) in enumerate(definitions):
+            card = ctk.CTkFrame(cards, fg_color="#161b22", border_width=1,
+                                border_color="#263040", corner_radius=12)
+            card.grid(row=index // 4, column=index % 4, sticky="nsew", padx=6, pady=6)
+            ctk.CTkLabel(card, text=title, text_color="#8b949e",
+                         font=ctk.CTkFont(size=10, weight="bold")).pack(anchor="w", padx=16, pady=(16, 4))
+            value = ctk.CTkLabel(card, text="--", text_color="#79c0ff",
+                                 font=ctk.CTkFont(size=17 if index >= 6 else 24, weight="bold"))
+            value.pack(anchor="w", padx=16)
+            detail = ctk.CTkLabel(card, text="Waiting for sample", text_color="#8b949e",
+                                  font=ctk.CTkFont(size=10))
+            detail.pack(anchor="w", padx=16, pady=(0, 10))
+            self._stat_labels[key] = (value, detail)
+            if index < 3:
+                bar = ctk.CTkProgressBar(card, height=4, fg_color="#263040", progress_color="#58a6ff")
+                bar.set(0)
+                bar.pack(fill="x", padx=16, pady=(0, 16))
+                self._bars[key] = bar
 
-        # Row 2: Recent activity
-        act_frame = ctk.CTkFrame(self, fg_color="#161b22", corner_radius=8)
-        act_frame.grid(row=2, column=0, sticky="ew", padx=20, pady=(5, 20))
-        ctk.CTkLabel(act_frame, text="📋  Recent Activity",
-                     font=ctk.CTkFont(size=13, weight="bold"),
-                     text_color="#c9d1d9").pack(anchor="w", padx=16, pady=(10, 4))
+        launch = ctk.CTkFrame(self, fg_color="transparent")
+        launch.grid(row=2, column=0, sticky="ew", padx=26, pady=(14, 10))
+        ctk.CTkLabel(launch, text="QUICK LAUNCH", text_color="#8b949e",
+                     font=ctk.CTkFont(size=10, weight="bold")).pack(anchor="w", pady=(0, 6))
+        row = ctk.CTkFrame(launch, fg_color="transparent")
+        row.pack(fill="x")
+        for index, (label, key) in enumerate((
+                ("Ping host", "ping"), ("DNS lookup", "dns"),
+                ("Discover devices", "netscan"), ("Stream Viewer", "camview"))):
+            row.grid_columnconfigure(index, weight=1, uniform="launch")
+            ctk.CTkButton(row, text=label, height=36, fg_color="#1c2d41",
+                          hover_color="#264663", text_color="#c9e5ff",
+                          command=lambda k=key: self.winfo_toplevel()._sidebar._select(k)
+                          ).grid(row=0, column=index, sticky="ew", padx=(0, 8 if index < 3 else 0))
+
+        activity = ctk.CTkFrame(self, fg_color="#161b22", corner_radius=12,
+                               border_width=1, border_color="#263040")
+        activity.grid(row=3, column=0, sticky="ew", padx=26, pady=(6, 22))
+        top = ctk.CTkFrame(activity, fg_color="transparent")
+        top.pack(fill="x", padx=16, pady=(10, 0))
+        ctk.CTkLabel(top, text="Recent activity", text_color="#c9d1d9",
+                     font=ctk.CTkFont(size=12, weight="bold")).pack(side="left")
+        self._status = ctk.CTkLabel(top, text="Starting local monitor", text_color="#8b949e",
+                                    font=ctk.CTkFont(size=10))
+        self._status.pack(side="right")
         self._activity_label = ctk.CTkLabel(
-            act_frame, text="No activity yet.",
-            font=ctk.CTkFont(family="Consolas", size=11),
-            text_color="#8b949e", justify="left", anchor="w",
-        )
-        self._activity_label.pack(fill="x", padx=16, pady=(0, 12))
+            activity, text="No activity yet. Start with a tool above, or press Ctrl+K.",
+            font=ctk.CTkFont(size=11), text_color="#8b949e", justify="left", anchor="w")
+        self._activity_label.pack(fill="x", padx=16, pady=(4, 12))
 
-    def _build_card(self, parent, title, row, col):
-        card = ctk.CTkFrame(parent, fg_color="#161b22", corner_radius=8,
-                            border_width=1, border_color="#21262d")
-        card.grid(row=row, column=col, padx=6, pady=6, sticky="nsew")
-        card.grid_columnconfigure(0, weight=1)
+    def on_show(self):
+        if self._stopped.is_set():
+            return
+        self._active.set()
+        if self._worker_thread is None:
+            self._worker_thread = threading.Thread(target=self._sample_loop, daemon=True,
+                                                    name="nettools-dashboard")
+            self._worker_thread.start()
+        if self._poll_id is None:
+            self._poll_samples()
 
-        ctk.CTkLabel(card, text=title,
-                     font=ctk.CTkFont(size=11),
-                     text_color="#8b949e").grid(row=0, column=0, sticky="w", padx=14, pady=(12, 2))
-        val_lbl = ctk.CTkLabel(card, text="—",
-                               font=ctk.CTkFont(size=22, weight="bold"),
-                               text_color="#79c0ff")
-        val_lbl.grid(row=1, column=0, sticky="w", padx=14, pady=(0, 0))
-        sub_lbl = ctk.CTkLabel(card, text="",
-                               font=ctk.CTkFont(size=10),
-                               text_color="#8b949e")
-        sub_lbl.grid(row=2, column=0, sticky="w", padx=14, pady=(0, 12))
-        return val_lbl, sub_lbl
+    def on_hide(self):
+        self._active.clear()
+        if self._poll_id is not None:
+            self.after_cancel(self._poll_id)
+            self._poll_id = None
 
-    # ---- refresh loop ----
-    def _refresh(self):
-        if not self.winfo_ismapped():
-            self.after(2000, self._refresh)
+    def on_app_close(self):
+        self.on_hide()
+        self._stopped.set()
+        self._active.set()  # Release the idle worker so it can exit.
+
+    def _sample_loop(self):
+        sampler = SystemSampler(psutil if PSUTIL_AVAILABLE else None,
+                                get_local_ip, _pu_net.default_gateway)
+        while not self._stopped.is_set():
+            self._active.wait()
+            if self._stopped.is_set():
+                return
+            try:
+                sample = sampler.sample()
+            except Exception:
+                sample = None
+            # Keep only the latest result; workers never touch Tk objects.
+            try:
+                self._samples.get_nowait()
+            except queue.Empty:
+                pass
+            self._samples.put_nowait(sample)
+            self._stopped.wait(2)
+
+    def _poll_samples(self):
+        self._poll_id = None
+        if not self._active.is_set() or self._stopped.is_set():
             return
         try:
-            self._update_stats()
-            self._update_activity()
-        except Exception:
+            sample = self._samples.get_nowait()
+        except queue.Empty:
             pass
-        self.after(2000, self._refresh)
-
-    def _color_for_pct(self, pct):
-        if pct >= 90:
-            return "#f85149"
-        if pct >= 80:
-            return "#f0883e"
-        return "#79c0ff"
-
-    def _update_stats(self):
-        # CPU
-        if PSUTIL_AVAILABLE:
-            cpu = psutil.cpu_percent()
-            vl, sl = self._stat_labels["CPU Usage"]
-            vl.configure(text=f"{cpu:.1f}%", text_color=self._color_for_pct(cpu))
-            sl.configure(text=f"{psutil.cpu_count()} cores")
-
-            # RAM
-            mem = psutil.virtual_memory()
-            vl, sl = self._stat_labels["RAM Usage"]
-            vl.configure(text=f"{mem.percent:.1f}%", text_color=self._color_for_pct(mem.percent))
-            sl.configure(text=f"{format_bytes_total(mem.used)} / {format_bytes_total(mem.total)}")
-
-            # Disk
-            try:
-                disk = psutil.disk_usage("C:\\")
-            except Exception:
-                disk = psutil.disk_usage("/")
-            vl, sl = self._stat_labels["Disk Usage"]
-            vl.configure(text=f"{disk.percent:.1f}%", text_color=self._color_for_pct(disk.percent))
-            sl.configure(text=f"{format_bytes_total(disk.used)} / {format_bytes_total(disk.total)}")
-
-            # Network I/O
-            nio = psutil.net_io_counters()
-            vl, sl = self._stat_labels["Network In"]
-            vl.configure(text=format_bytes_total(nio.bytes_recv))
-            sl.configure(text=f"{nio.packets_recv:,} packets")
-
-            vl, sl = self._stat_labels["Network Out"]
-            vl.configure(text=format_bytes_total(nio.bytes_sent))
-            sl.configure(text=f"{nio.packets_sent:,} packets")
-
-            # Active connections
-            try:
-                conns = len(psutil.net_connections())
-            except Exception:
-                conns = 0
-            vl, sl = self._stat_labels["Active Conns"]
-            vl.configure(text=str(conns))
-            sl.configure(text="TCP + UDP")
         else:
-            for key in ("CPU Usage", "RAM Usage", "Disk Usage", "Network In",
-                        "Network Out", "Active Conns"):
-                vl, sl = self._stat_labels[key]
-                vl.configure(text="N/A")
-                sl.configure(text="psutil not available")
+            if sample is None:
+                self._status.configure(text="Local metrics temporarily unavailable", text_color="#d29922")
+            else:
+                self._render_sample(sample)
+                self._status.configure(text=f"Local monitor  |  {datetime.now():%H:%M:%S}",
+                                       text_color="#3fb950")
+        self._update_activity()
+        self._poll_id = self.after(200, self._poll_samples)
 
-        # Local IP (no psutil needed)
-        vl, sl = self._stat_labels["Local IP"]
-        lip = get_local_ip()
-        vl.configure(text=lip, font=ctk.CTkFont(size=16, weight="bold"))
-        sl.configure(text="Primary adapter")
+    def _set_metric(self, key, value, detail, percent=None):
+        value_label, detail_label = self._stat_labels[key]
+        color = "#f85149" if percent is not None and percent >= 90 else (
+            "#f0883e" if percent is not None and percent >= 80 else "#79c0ff")
+        value_label.configure(text=value, text_color=color)
+        detail_label.configure(text=detail)
+        if key in self._bars:
+            self._bars[key].set(max(0, min(1, percent / 100)) if percent is not None else 0)
+            self._bars[key].configure(progress_color=color)
 
-        # Gateway
-        vl, sl = self._stat_labels["Gateway"]
-        if self._gateway_cache is None:
-            self._gateway_cache = self._get_gateway()
-        vl.configure(text=self._gateway_cache, font=ctk.CTkFont(size=16, weight="bold"))
-        sl.configure(text="Default route")
+    def _render_sample(self, sample):
+        cpu = sample["cpu"]
+        self._set_metric("CPU Usage", f"{cpu:.1f}%" if cpu is not None else "N/A",
+                         f'{sample["cores"]} logical cores' if sample["cores"] else "Unavailable", cpu)
+        for key, field in (("RAM Usage", "memory"), ("Disk Usage", "disk")):
+            metric = sample[field]
+            self._set_metric(key, f"{metric.percent:.1f}%" if metric else "N/A",
+                             f"{format_bytes_total(metric.used)} / {format_bytes_total(metric.total)}"
+                             if metric else "Unavailable", metric.percent if metric else None)
+        for key, field, total in (("Network In", "download", "received"), ("Network Out", "upload", "sent")):
+            rate = sample[field]
+            self._set_metric(key, format_bytes_rate(rate) if rate is not None else "--",
+                             f'{format_bytes_total(sample[total])} total' if sample[total] is not None else "Unavailable")
+        connections = sample["connections"]
+        self._set_metric("Active Conns", str(connections) if connections is not None else "N/A",
+                         "Visible TCP + UDP sockets" if connections is not None else "Unavailable / permission denied")
+        self._set_metric("Local IP", sample["local_ip"] or "N/A", "Primary IPv4 adapter")
+        self._set_metric("Gateway", sample["gateway"] or "N/A", "Default IPv4 route")
 
     def _update_activity(self):
-        entries = SessionHistory.get_all()
-        if not entries:
-            self._activity_label.configure(text="No activity yet.")
-            return
-        lines = []
-        for e in entries[-10:]:
-            lines.append(f"[{e['timestamp']}]  {e['tool']} \u2014 {e['action']}")
-        lines.reverse()
-        self._activity_label.configure(text="\n".join(lines))
-
-    def _get_gateway(self):
-        try:
-            gw = _pu_net.default_gateway()
-            if gw:
-                return gw
-        except Exception:
-            pass
-        return "N/A"
+        entries = SessionHistory.get_all()[-4:]
+        text = "\n".join(f'[{entry["timestamp"]}]  {entry["tool"]} - {entry["action"]}'
+                         for entry in reversed(entries))
+        if not text:
+            text = "No activity yet. Start with a tool above, or press Ctrl+K."
+        if text != self._activity_label.cget("text"):
+            self._activity_label.configure(text=text)
 
 
 # ==================== Main App ====================
@@ -9285,8 +9741,9 @@ class App(ctk.CTk):
         content.grid_columnconfigure(0, weight=1)
         content.grid_rowconfigure(0, weight=1)
 
-        # Build all frames
-        cls_map = {
+        # Build pages on demand; keep visited pages alive (including camera streams).
+        self._content = content
+        self._frame_classes = {
             "dashboard":    DashboardFrame,
             "ping":         PingFrame,
             "portscan":     PortScanFrame,
@@ -9301,6 +9758,7 @@ class App(ctk.CTk):
             "bandwidth":    BandwidthFrame,
             "connections":  ConnectionsFrame,
             "arp":          ARPFrame,
+            "bluetooth":    BluetoothScannerFrame,
             "camfinder":    CameraFinderFrame,
             "camview":      CameraViewerFrame,
             "system_tools": SystemToolsFrame,
@@ -9313,12 +9771,10 @@ class App(ctk.CTk):
             "mdns":         MDNSFrame,
         }
         self._frames = {}
-        for key, cls in cls_map.items():
-            frm = cls(content)
-            frm.grid(row=0, column=0, sticky="nsew")
-            self._frames[key] = frm
-
+        self._current_key = None
         sidebar.select_default()
+        self.bind("<Control-k>", lambda event: self._sidebar.focus_search())
+        self.bind("<Control-K>", lambda event: self._sidebar.focus_search())
 
         # System tray
         self._tray = TrayManager(self)
@@ -9330,16 +9786,58 @@ class App(ctk.CTk):
         self.update_idletasks()
         self.deiconify()
         self.lift()
+        errors = [manager._load_error for manager in (SettingsManager, FavoritesManager)
+                  if manager._load_error]
+        if errors:
+            messagebox.showwarning("Saved data needs attention", "\n\n".join(errors), parent=self)
 
     def _on_close(self):
         if self._tray.is_ready() and SettingsManager.get("minimize_to_tray", True):
+            frame = self._frames.get(self._current_key)
+            if frame is not None and hasattr(frame, "on_hide"):
+                frame.on_hide()
             self._tray.minimize_to_tray()
         else:
-            self._tray.stop()
-            self.destroy()
+            self._exit_app()
+
+    def _restore_from_tray(self):
+        self.deiconify()
+        self._show(self._current_key)
+        self.lift()
+
+    def _exit_app(self):
+        self._stop_background_tools()
+        self._tray.stop()
+        self.destroy()
 
     def _show(self, key):
+        if key not in self._frame_classes:
+            return
+        if key not in self._frames:
+            self._frames[key] = self._frame_classes[key](self._content)
+        current = getattr(self, "_current_key", None)
+        if current and current != key:
+            frame = self._frames.get(current)
+            if frame is not None and hasattr(frame, "on_hide"):
+                try:
+                    frame.on_hide()
+                except Exception:
+                    pass
+            if frame is not None:
+                frame.grid_remove()
+        self._frames[key].grid(row=0, column=0, sticky="nsew")
         self._frames[key].tkraise()
+        self._current_key = key
+        if hasattr(self._frames[key], "on_show"):
+            self._frames[key].on_show()
+
+    def _stop_background_tools(self):
+        for frame in getattr(self, "_frames", {}).values():
+            if hasattr(frame, "on_app_close"):
+                try:
+                    frame.on_app_close()
+                except Exception:
+                    pass
 
     def _open_viewer(self, ip, port=80, vendor_hint=""):
         """Switch to Stream Viewer and pre-fill the target camera IP.

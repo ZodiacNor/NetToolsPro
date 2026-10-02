@@ -2,9 +2,32 @@
 
 All notable changes to NetTools Pro are documented here.
 
+## [Unreleased — v1.10.0] - 2026-09-06
+
+### Added
+- Sidebar tool search with Ctrl+K, Enter, Escape, category matching, and common aliases such as RTSP and BLE.
+- Dashboard quick launch for Ping, DNS, Network Scan, and Stream Viewer.
+- Atomic per-user settings/favorites storage, validation, legacy-file migration, and visible save errors. Unreadable files are preserved and protected against replacement.
+- Deterministic regression tests for persistence, traffic rates, search, and the protected camera/glyph/Bluetooth baseline; opt-in desktop and packaged-binary smoke tests.
+
+### Changed
+- Create tool pages on first use instead of constructing all 25 at startup; retain visited pages and camera state.
+- Refreshed dashboard cards, resource bars, and live upload/download speeds with cumulative totals below.
+- Collect dashboard metrics off the GUI thread, throttle route/socket checks, and pause sampling when the dashboard is hidden.
+- Refresh history and favorites when revisiting their pages.
+- Explicitly exclude pystray from the Linux binary; keep the Windows tray lifecycle compatible with dashboard pause/resume.
+
+### Fixed
+- Settings and favorites no longer save into a temporary PyInstaller extraction directory.
+- Failed favorite saves/removals no longer silently diverge from the saved file.
+- Unavailable socket statistics show N/A instead of a misleading zero.
+
+Camera playback, the recovered glyph wrappers, and the existing Bluetooth scanner implementation remain unchanged. This is a local build, not a published release.
+
 ## [Unreleased — v1.9.0-dev] - Linux port in progress
 
 ### Added
+- **Bluetooth Scanner (Fedora/Linux)** — BlueZ system D-Bus scanner with adapter listing, Auto/BLE/Classic/Known-cached/Diagnostic modes, live device table, precise BLE privacy-safe classifications, and JSON/CSV export
 - **Linux bootstrap** — `install.sh` detects `dnf` or `apt`, installs system packages, creates `.venv`, and installs `requirements.txt`; supports Ubuntu/Debian and Fedora
 - `INSTALL-LINUX.md` — concise installation guide for Linux
 - `BaseToolFrame._safe_after()` — thread-safe wrapper around `self.after()` that silently drops scheduling errors (`RuntimeError`, `TclError`) when a widget is destroyed or the event loop is not yet running

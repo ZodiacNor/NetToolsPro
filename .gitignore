@@ -60,3 +60,6 @@ AGENTS.md
 # Local environments and private state
 /.handover.md
 /.learning.md
+
+# Local private state (not project source)
+/docs/internal-no/imported-home-2026-10-02/

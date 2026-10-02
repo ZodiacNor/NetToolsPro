@@ -10,11 +10,11 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=datas,
-    hiddenimports=['PIL._tkinter_finder'],
+    hiddenimports=['PIL._tkinter_finder', 'dbus_next', 'dbus_next.aio', 'dbus_next.constants'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['pystray'],  # Linux must not load the desktop portal/tray backend.
     noarchive=False,
     optimize=0,
 )

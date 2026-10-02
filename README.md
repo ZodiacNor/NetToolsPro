@@ -22,7 +22,9 @@ The application is intended for IT technicians, network administrators, field se
 
 ### Dashboard
 
-![NetTools Pro dashboard](docs/screenshots/main-dashboard.png)
+![NetTools Pro dashboard](docs/screenshots/workspace-dashboard.png)
+
+The dashboard screenshot shows the local v1.10.0 workspace update. Published release assets may still show the previous layout.
 
 ### Camera Discovery
 
@@ -70,6 +72,16 @@ The Linux binary is provided for x86_64 Linux systems. It has been built and tes
 
 ## Highlights
 
+### Workspace (v1.10.0, local/unreleased)
+
+- Faster startup: tool pages are created when first opened and then retained
+- Find tools with **Ctrl+K**, including terms such as RTSP, BLE, CIDR, and wake on LAN; **Enter** opens the first match and **Escape** clears the search
+- Refreshed dashboard with live upload/download rates, resource bars, and quick-launch buttons
+- Dashboard system checks run in the background and pause when another page is selected
+- Settings and favorites survive binary upgrades, with atomic saves and safe migration from older app-local JSON files
+
+See [workspace update and verification](docs/workspace-update.md) for storage locations, test commands, and remaining limitations.
+
 ### Network Diagnostics
 
 - Ping testing
@@ -80,6 +92,7 @@ The Linux binary is provided for x86_64 Linux systems. It has been built and tes
 - ARP table inspection
 - Subnet calculations
 - Interface overview
+- Bluetooth Scanner for Fedora/Linux through BlueZ D-Bus
 
 ### Camera Discovery & Stream Wall
 
@@ -112,6 +125,16 @@ The Linux binary is provided for x86_64 Linux systems. It has been built and tes
 - Built-in script editor
 - Run and inspect command/script output
 - Useful for repeatable diagnostics and field troubleshooting
+
+### Bluetooth Scanner
+
+- Fedora/Linux BlueZ D-Bus backend
+- Auto, BLE-only, Classic-only, Known/cached, and Diagnostic modes
+- Detects visible Classic devices, BLE advertisements, unnamed BLE broadcasters, random/private BLE addresses, and known/cached BlueZ devices
+- JSON and CSV export
+- Uses precise labels such as `Anonymous BLE`, `Random/private address`, `Unknown broadcaster`, and `Cached/known device`
+
+See [Bluetooth Scanner — Fedora 43](docs/bluetooth-scanner-fedora43.md) for setup, limits, diagnostics, and manual test plan.
 
 ---
 
@@ -211,6 +234,7 @@ The resulting binary can be copied to `release/NetToolsPro-linux-x86_64.bin`.
 
 - The Linux binary has been built and tested on Fedora x86_64. For other distributions, running from source or rebuilding locally may provide the best compatibility.
 - Some network and system tools may require Administrator/root privileges.
+- Bluetooth Scanner requires BlueZ on Linux and should be used only on systems or radio environments where you have permission.
 ---
 
 ## Project Structure
@@ -218,10 +242,16 @@ The resulting binary can be copied to `release/NetToolsPro-linux-x86_64.bin`.
 ```
 NetToolsPro/
 ├── nettools.py
+├── modules/
+│   ├── app_storage.py
+│   ├── dashboard_stats.py
+│   ├── tool_search.py
+│   └── bluetooth_scanner/
 ├── platform_utils/
 ├── system_backend.py
 ├── docs/
 │   ├── screenshots/
+│   ├── bluetooth-scanner-fedora43.md
 │   ├── skills/
 │   └── windows-scripts/
 ├── requirements.txt
