@@ -287,3 +287,10 @@ Created by Bengt Simon Røch Dragseth.
 ## License
 
 Released under the MIT License. See [LICENSE](LICENSE) for details.
+
+## Local completion build (2026-10-04)
+
+Linux: `dist/NetToolsPro.bin`. Windows: `dist/NetToolsPro.exe`.
+Both contain 1.10.0; neither is a newly published GitHub release.
+See [Windows build and verification](docs/windows-build.md) for the reproducible
+build, isolated Wine checks, and physical-platform limitations.

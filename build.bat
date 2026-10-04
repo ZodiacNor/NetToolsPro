@@ -1,131 +1,35 @@
 @echo off
 setlocal
-
-set "VERSION=1.9.0"
-title NetTools Pro v%VERSION% - Windows Build
-
 cd /d "%~dp0"
+set "VENV_PY=.venv-windows\Scripts\python.exe"
+if /i "%~1"=="--setup" goto setup
+if not exist "%VENV_PY%" (
+    echo ERROR: Run build.bat --setup first.
+    exit /b 1
+)
+"%VENV_PY%" -B -m unittest discover -s tests -q
+if errorlevel 1 exit /b 1
+"%VENV_PY%" -m PyInstaller --noconfirm --clean --workpath build\windows-pyinstaller --distpath build\windows-staging NetToolsPro.exe.spec
+if errorlevel 1 exit /b 1
+if not exist "build\windows-staging\NetToolsPro.exe" exit /b 1
+if not exist dist mkdir dist
+"%VENV_PY%" -c "from pathlib import Path; import shutil,os; p=Path('dist/NetToolsPro.exe'); b=Path('build/windows-before-replace'); b.mkdir(parents=True,exist_ok=True); shutil.copy2(p,b/'NetToolsPro.exe') if p.exists() else None; shutil.copy2('build/windows-staging/NetToolsPro.exe',str(p)+'.new'); os.replace(str(p)+'.new',p)"
+if errorlevel 1 exit /b 1
+echo PASS: dist\NetToolsPro.exe is ready. Existing Linux and release files were preserved.
+exit /b 0
 
-echo ============================================
-echo   Building NetTools Pro v%VERSION%
-echo ============================================
-echo.
-
-echo [1/6] Locating Python 3.10+...
-where py >nul 2>nul
-if %errorlevel%==0 (
-    set "PY_CMD=py -3"
+:setup
+if defined NETTOOLS_PYTHON (
+    set "PY_CMD="%NETTOOLS_PYTHON%""
 ) else (
-    where python >nul 2>nul
-    if %errorlevel%==0 (
-        set "PY_CMD=python"
-    ) else (
-        echo [ERROR] Python 3.10+ was not found.
-        echo Install Python from https://www.python.org/ and enable "Add Python to PATH".
-        pause
-        exit /b 1
-    )
+    where py >nul 2>nul
+    if errorlevel 1 (set "PY_CMD=python") else (set "PY_CMD=py -3")
 )
-
 %PY_CMD% -c "import sys; raise SystemExit(0 if sys.version_info >= (3,10) else 1)"
-if errorlevel 1 (
-    echo [ERROR] Python 3.10+ is required.
-    echo Install Python 3.10 or newer from https://www.python.org/.
-    pause
-    exit /b 1
-)
-echo       Using: %PY_CMD%
-echo       Done.
-echo.
-
-echo [2/6] Preparing virtual environment...
-if not exist ".venv\Scripts\python.exe" (
-    %PY_CMD% -m venv .venv
-    if errorlevel 1 (
-        echo [ERROR] Failed to create .venv.
-        pause
-        exit /b 1
-    )
-)
-set "VENV_PY=.venv\Scripts\python.exe"
-echo       Done.
-echo.
-
-echo [3/6] Installing / upgrading dependencies...
-"%VENV_PY%" -m pip install --upgrade pip
-if errorlevel 1 (
-    echo [ERROR] pip upgrade failed.
-    pause
-    exit /b 1
-)
-
-"%VENV_PY%" -m pip install -r requirements.txt
-if errorlevel 1 (
-    echo [ERROR] Dependency install failed.
-    pause
-    exit /b 1
-)
-
-"%VENV_PY%" -m pip install pyinstaller
-if errorlevel 1 (
-    echo [ERROR] PyInstaller install failed.
-    pause
-    exit /b 1
-)
-echo       Done.
-echo.
-
-echo [4/6] Checking Python syntax...
-"%VENV_PY%" -m py_compile nettools.py
-if errorlevel 1 (
-    echo [ERROR] Python syntax check failed.
-    pause
-    exit /b 1
-)
-echo       Done.
-echo.
-
-echo [5/6] Cleaning previous build output...
-if exist build rmdir /s /q build
-if exist dist rmdir /s /q dist
-echo       Done.
-echo.
-
-echo [6/6] Building Windows executable with PyInstaller...
-"%VENV_PY%" -m PyInstaller --clean -y "NetTools Pro.spec"
-if errorlevel 1 (
-    echo [ERROR] PyInstaller build failed. See output above.
-    pause
-    exit /b 1
-)
-
-if not exist "dist\NetTools Pro.exe" (
-    echo [ERROR] Build completed but dist\NetTools Pro.exe was not found.
-    pause
-    exit /b 1
-)
-
-if not exist release mkdir release
-copy /Y "dist\NetTools Pro.exe" "release\NetToolsPro-windows-x64.exe" >nul
-if errorlevel 1 (
-    echo [ERROR] Failed to copy Windows release asset.
-    pause
-    exit /b 1
-)
-
-echo.
-echo ============================================
-echo   Build complete:
-echo   dist\NetTools Pro.exe
-echo   release\NetToolsPro-windows-x64.exe
-echo ============================================
-echo.
-
-for %%F in ("dist\NetTools Pro.exe") do echo dist size: %%~zF bytes
-for %%F in ("release\NetToolsPro-windows-x64.exe") do echo release size: %%~zF bytes
-
-echo.
-set /p OPEN="Open dist folder now? [Y/N]: "
-if /i "%OPEN%"=="Y" explorer dist
-
-pause
+if errorlevel 1 exit /b 1
+if not exist "%VENV_PY%" %PY_CMD% -m venv .venv-windows
+if errorlevel 1 exit /b 1
+"%VENV_PY%" -m pip install -r requirements-windows-build.txt
+if errorlevel 1 exit /b 1
+echo PASS: Windows build environment is ready.
+exit /b 0

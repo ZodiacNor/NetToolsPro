@@ -63,3 +63,5 @@ AGENTS.md
 
 # Local private state (not project source)
 /docs/internal-no/imported-home-2026-10-02/
+
+/.venv-windows/

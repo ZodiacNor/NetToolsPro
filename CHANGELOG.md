@@ -2,6 +2,18 @@
 
 All notable changes to NetTools Pro are documented here.
 
+## v1.10.0 — 2026-10-04 (local Windows delivery)
+
+- Build the matching standalone Windows executable with Windows CPython 3.13
+  and PyInstaller in a project-owned Wine prefix.
+- Update Windows version resources to 1.10.0 and select the Windows tray backend.
+- Replace broad build-directory deletion with isolated staging, backup of the
+  previous executable and atomic replacement; preserve Linux/release files.
+- Pin Windows build dependencies and document native Windows and Wine commands.
+- Account for asynchronous Windows resize events in the GUI verification.
+- Verify all 25 tool pages on Linux and Wine, plus frozen startup on both.
+  Physical Windows camera, tray and Bluetooth testing remains pending.
+
 ## [Unreleased — v1.10.0] - 2026-09-06
 
 ### Added

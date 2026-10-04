@@ -96,8 +96,13 @@ def main():
                 capture("dashboard.png")
                 app.geometry("980x640")
                 app.update_idletasks()
+                # Windows delivers Configure after the geometry call; let Tk
+                # process it before inspecting the resized widget tree.
+                resized = app_module.tk.BooleanVar(value=False)
+                app.after(300, lambda: resized.set(True))
+                app.wait_variable(resized)
                 capture("dashboard-small.png")
-                assert dashboard._activity_label.winfo_rooty() + dashboard._activity_label.winfo_height() <= app.winfo_rooty() + app.winfo_height()
+                assert dashboard._activity_label.winfo_rooty() + dashboard._activity_label.winfo_height() <= app.winfo_rooty() + app.winfo_height(), f"Activity bottom={dashboard._activity_label.winfo_rooty() + dashboard._activity_label.winfo_height()}, window bottom={app.winfo_rooty() + app.winfo_height()}, geometry={app.winfo_geometry()}"
                 app.geometry("1340x820")
                 sidebar = app._sidebar
                 sidebar._search_var.set("ping")
@@ -156,10 +161,12 @@ def main():
                     assert not dashboard._stopped.is_set()
                     app._restore_from_tray()
                     assert dashboard._active.is_set()
-                assert "pystray" not in sys.modules, "Linux must not import tray backend"
+                if sys.platform != "win32":
+                    assert "pystray" not in sys.modules, "Linux must not import tray backend"
                 print("PASS: 25 pages, search, lazy caching, history, four camera canvases, fullscreen, viewer handoff, tray lifecycle")
             except Exception as error:
-                errors.append(repr(error))
+                import traceback
+                errors.append(traceback.format_exc())
             finally:
                 app._exit_app()
 
