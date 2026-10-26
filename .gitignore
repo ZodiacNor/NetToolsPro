@@ -53,3 +53,9 @@ Thumbs.db
 .codex/
 .claude/
 AGENTS.md
+
+# Private agent notes and local verification
+/.handover.md
+/.learning.md
+/backup/
+/reports/
