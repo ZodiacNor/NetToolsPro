@@ -1,7 +1,7 @@
 customtkinter==5.2.2
 psutil==7.2.2
 dnspython==2.8.0
-Pillow==12.2.0
+Pillow==13.0.0
 opencv-python-headless==4.13.0.92
 pystray==0.19.5
 pyinstaller==6.20.0

@@ -2,6 +2,28 @@
 
 All notable changes to NetTools Pro are documented here.
 
+## Unreleased - 2026-11-04 (local bug fixes)
+
+- Require Pillow 13.0.0 or newer and document Python 3.11 as the minimum version;
+  pin Pillow 13.0.0 in the Windows build environment.
+- Preserve uncertain UDP results as `OPEN|FILTERED`, classify TCP timeouts correctly,
+  and fingerprint only confirmed TCP services.
+- Validate custom port ranges and scan options before starting workers; capture
+  options on the GUI thread so edits cannot change an active scan.
+- Bound pending network/port probes, enumerate hosts lazily, and throttle progress
+  updates. Cancellation drops queued work and restores the scan controls.
+- Enforce ARP scan deadlines even without stdout, drain stderr concurrently, and
+  support cancellation while waiting for output.
+- Fix Windows ARP address matching and select default routes by interface/metric.
+- Run Python scripts through an external interpreter in packaged builds; report
+  a missing interpreter instead of launching another copy of NetTools Pro.
+- Preserve Bluetooth properties across partial updates, including pairing and
+  private address type; apply explicit empty/false property values correctly.
+- Cancel bandwidth timers on stop, reset rate baselines when interfaces or counters
+  change, and use a monotonic clock for throughput calculations.
+- Add offline regressions, GUI scan-control checks, and a repeatable queue-memory
+  benchmark. Camera playback and the protected GUI baseline remain unchanged.
+
 ## v1.10.0 — 2026-10-04 (local Windows delivery)
 
 - Build the matching standalone Windows executable with Windows CPython 3.13

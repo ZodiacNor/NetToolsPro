@@ -3,7 +3,7 @@
 Cross-platform network diagnostics, camera discovery, stream viewing, and system utility toolkit.
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
+![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey.svg)
 ![Status](https://img.shields.io/badge/Status-Active-brightgreen.svg)
 ![Release](https://img.shields.io/github/v/release/ZodiacNor/NetToolsPro)

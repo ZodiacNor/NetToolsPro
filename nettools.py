@@ -31,6 +31,7 @@ import re
 import json
 import pathlib
 import ctypes
+import errno
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import xml.etree.ElementTree as ET
@@ -45,6 +46,7 @@ from modules.app_storage import (
 )
 from modules.dashboard_stats import SystemSampler
 from modules.tool_search import search_tools
+from modules.scan_tasks import scan_results
 from modules.bluetooth_scanner import LinuxBlueZBackend, ScanConfig
 from modules.bluetooth_scanner.diagnostics import run_diagnostics as run_bluetooth_diagnostics
 from modules.bluetooth_scanner.exporter import export_csv as export_bluetooth_csv
@@ -1637,8 +1639,16 @@ class PortScanFrame(BaseToolFrame):
         # Custom
         m = self.mode_var.get()
         if m == "common":   return list(COMMON_PORTS.keys())
-        if m == "range":    return list(range(self.start_port.get(), self.end_port.get() + 1))
-        if m == "single":   return [self.single_port.get()]
+        if m == "range":
+            first, last = self.start_port.get(), self.end_port.get()
+            if not 1 <= first <= last <= 65535:
+                raise ValueError("Port range must satisfy 1 <= start <= end <= 65535.")
+            return list(range(first, last + 1))
+        if m == "single":
+            port = self.single_port.get()
+            if not 1 <= port <= 65535:
+                raise ValueError("Port must be between 1 and 65535.")
+            return [port]
         return list(range(1, 65536))
 
     # ── Service fingerprinting ──
@@ -1765,7 +1775,16 @@ class PortScanFrame(BaseToolFrame):
         if not t:
             messagebox.showwarning("Input", "Enter a target.")
             return
-        ports = self._get_ports()
+        try:
+            ports = self._get_ports()
+            options = (self.timeout_var.get(), self.proto_var.get(),
+                       min(self.threads_var.get(), 500), self.open_only_var.get(),
+                       self.fingerprint_var.get())
+            if options[0] <= 0 or options[2] <= 0:
+                raise ValueError("Timeout and thread count must be positive.")
+        except (ValueError, tk.TclError) as exc:
+            messagebox.showwarning("Input", str(exc))
+            return
         if len(ports) > 10000 and not messagebox.askyesno(
                 "Large Scan", f"Scanning {len(ports):,} ports. Continue?"):
             return
@@ -1787,14 +1806,19 @@ class PortScanFrame(BaseToolFrame):
         )
         self.output.append("─" * 65, "dim")
         self.start_poll()
-        threading.Thread(target=self._worker, args=(t, ports), daemon=True).start()
+        threading.Thread(target=self._worker, args=(t, ports, options), daemon=True).start()
+
+    def stop_op(self):
+        self.stop_event.set()
 
     def _tcp_scan(self, host, port, to_ms):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(to_ms / 1000)
                 r = s.connect_ex((host, port))
-                return "open" if r == 0 else "closed"
+                if r == 0:
+                    return "open"
+                return "closed" if r in (errno.ECONNREFUSED, 10061) else "filtered"
         except socket.timeout:
             return "filtered"
         except Exception:
@@ -1804,8 +1828,9 @@ class PortScanFrame(BaseToolFrame):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
                 s.settimeout(to_ms / 1000)
-                s.sendto(b"\x00", (host, port))
-                s.recvfrom(1024)
+                s.connect((host, port))
+                s.send(b"\x00")
+                s.recv(1024)
             return "open"
         except socket.timeout:
             return "open|filtered"
@@ -1817,19 +1842,27 @@ class PortScanFrame(BaseToolFrame):
     def _scan_one(self, host, port, proto, to_ms, do_fp):
         if self.stop_event.is_set():
             return port, "cancelled", proto, "", ""
+        tcp_open = False
         if proto == "TCP":
             state = self._tcp_scan(host, port, to_ms)
+            tcp_open = state == "open"
         elif proto == "UDP":
             state = self._udp_scan(host, port, to_ms)
         else:
             tcp = self._tcp_scan(host, port, to_ms)
             udp = self._udp_scan(host, port, to_ms)
-            state = "open" if "open" in tcp or "open" in udp else tcp
+            tcp_open = tcp == "open"
+            if tcp_open or udp == "open":
+                state = "open"
+            elif udp == "open|filtered":
+                state = "open|filtered"
+            else:
+                state = "closed" if tcp == udp == "closed" else "filtered"
             proto = f"TCP:{tcp}/UDP:{udp}"
 
         svc, detail = "", ""
-        is_open = "open" in str(state).lower()
-        if is_open and do_fp:
+        is_open = state == "open"
+        if tcp_open and do_fp:
             try:
                 svc, detail = self._fingerprint(host, port, timeout_s=min(to_ms / 1000, 2.0))
             except Exception:
@@ -1838,60 +1871,76 @@ class PortScanFrame(BaseToolFrame):
             svc = COMMON_PORTS.get(port, "")
         return port, state, proto, svc, detail
 
-    def _worker(self, host, ports):
-        to_ms = self.timeout_var.get()
-        proto = self.proto_var.get()
-        n_threads = min(self.threads_var.get(), 500)
-        open_only = self.open_only_var.get()
-        do_fp = self.fingerprint_var.get()
-        done = 0
+    def _worker(self, host, ports, options):
+        failed = False
+        try:
+            self._scan_ports(host, ports, options)
+        except Exception as exc:
+            failed = True
+            self.q(f"Scan failed: {exc}", "error")
+        finally:
+            stopped = self.stop_event.is_set()
+            def finish():
+                self.ui_done()
+                self._prog_bar.set(self._scan_stats["scanned"] / self._total if self._total else 0)
+                self._prog_lbl.configure(text="Scan stopped" if stopped else "Scan failed" if failed else "Scan complete")
+            self.after(0, finish)
 
-        with ThreadPoolExecutor(max_workers=n_threads) as ex:
-            futs = {ex.submit(self._scan_one, host, p, proto, to_ms, do_fp): p for p in ports}
-            for fut in as_completed(futs):
-                if self.stop_event.is_set():
-                    break
-                try:
-                    port, state, p_label, svc, detail = fut.result()
-                    done += 1
-                    self._scan_stats["scanned"] = done
-                    is_open = "open" in str(state).lower()
-                    if is_open:
-                        self._scan_stats["open"] += 1
-                        svc_display = svc or COMMON_PORTS.get(port, "—")
-                        detail_short = detail[:60] if detail else ""
-                        self.q(
-                            f"{port:<8} {'OPEN':<11} {svc_display:<14} {detail_short}",
-                            "success",
-                        )
-                        self._results.append({
-                            "port": port, "proto": p_label, "state": "OPEN",
-                            "service": svc_display, "detail": detail,
-                        })
-                    elif "filter" in str(state).lower():
-                        self._scan_stats["filtered"] += 1
-                        if not open_only:
-                            self.q(f"{port:<8} {'FILTERED':<11}", "warning")
-                    else:
-                        self._scan_stats["closed"] += 1
-                        if not open_only:
-                            self.q(f"{port:<8} {'CLOSED':<11}", "dim")
-                    pct = done / self._total
-                    self.after(0, lambda p=pct, d=done: (
-                        self._prog_bar.set(p),
-                        self._prog_lbl.configure(text=f"Scanning {d}/{self._total}"),
-                        self.s_scanned.configure(text=str(self._scan_stats["scanned"])),
-                        self.s_open.configure(text=str(self._scan_stats["open"]), text_color="#3fb950"),
-                        self.s_closed.configure(text=str(self._scan_stats["closed"])),
-                        self.s_filtered.configure(text=str(self._scan_stats["filtered"]), text_color="#d29922"),
-                    ))
-                except Exception:
-                    done += 1
+    def _scan_ports(self, host, ports, options):
+        to_ms, proto, n_threads, open_only, do_fp = options
+        done = 0
+        last_update = 0
+
+        def probe(port):
+            return self._scan_one(host, port, proto, to_ms, do_fp)
+
+        for _, fut in scan_results(probe, ports, n_threads, self.stop_event):
+            try:
+                port, state, p_label, svc, detail = fut.result()
+                done += 1
+                self._scan_stats["scanned"] = done
+                is_open = state == "open"
+                if is_open:
+                    self._scan_stats["open"] += 1
+                    svc_display = svc or COMMON_PORTS.get(port, "—")
+                    detail_short = detail[:60] if detail else ""
+                    self.q(
+                        f"{port:<8} {'OPEN':<11} {svc_display:<14} {detail_short}",
+                        "success",
+                    )
+                    self._results.append({
+                        "port": port, "proto": p_label, "state": "OPEN",
+                        "service": svc_display, "detail": detail,
+                    })
+                elif "filter" in str(state).lower():
+                    self._scan_stats["filtered"] += 1
+                    if not open_only:
+                        self.q(f"{port:<8} {state.upper():<14}", "warning")
+                else:
+                    self._scan_stats["closed"] += 1
+                    if not open_only:
+                        self.q(f"{port:<8} {'CLOSED':<11}", "dim")
+                pct = done / self._total
+                now = time.monotonic()
+                if now - last_update < 0.1 and done != self._total:
+                    continue
+                last_update = now
+                self.after(0, lambda p=pct, d=done: (
+                    self._prog_bar.set(p),
+                    self._prog_lbl.configure(text=f"Scanning {d}/{self._total}"),
+                    self.s_scanned.configure(text=str(self._scan_stats["scanned"])),
+                    self.s_open.configure(text=str(self._scan_stats["open"]), text_color="#3fb950"),
+                    self.s_closed.configure(text=str(self._scan_stats["closed"])),
+                    self.s_filtered.configure(text=str(self._scan_stats["filtered"]), text_color="#d29922"),
+                ))
+            except Exception:
+                done += 1
 
         # Summary
         ss = self._scan_stats
         self.q(f"\n{'─'*65}", "dim")
-        self.q(f"Scan complete — Open: {ss['open']}  Closed: {ss['closed']}  Filtered: {ss['filtered']}", "header")
+        status = "Scan stopped" if self.stop_event.is_set() else "Scan complete"
+        self.q(f"{status} — Open: {ss['open']}  Closed: {ss['closed']}  Filtered: {ss['filtered']}", "header")
 
         # Show fingerprint detail for open ports
         if self._results and do_fp:
@@ -1903,8 +1952,6 @@ class PortScanFrame(BaseToolFrame):
 
         SessionHistory.log("Port Scanner", f"Scan {host}",
                           f"Open: {ss['open']}, Closed: {ss['closed']}, Filtered: {ss['filtered']}")
-        self.after(0, lambda: (self.ui_done(), self._prog_bar.set(1),
-                               self._prog_lbl.configure(text="Scan complete")))
 
     def _copy_results(self):
         if not self._results:
@@ -2503,16 +2550,26 @@ class NetworkScanFrame(BaseToolFrame):
         except ValueError as e:
             messagebox.showwarning("Input", f"Invalid network: {e}")
             return
-        hosts = list(net.hosts())
-        if len(hosts) > 1024 and not messagebox.askyesno(
-                "Large Scan", f"Scanning {len(hosts):,} hosts — continue?"):
+        host_count = net.num_addresses if net.prefixlen >= 31 else net.num_addresses - 2
+        if host_count > 1024 and not messagebox.askyesno(
+                "Large Scan", f"Scanning {host_count:,} hosts — continue?"):
+            return
+        try:
+            options = (self.timeout_var.get(), min(self.threads_var.get(), 256), self.resolve_var.get())
+            if options[0] <= 0 or options[1] <= 0:
+                raise ValueError("Timeout and thread count must be positive.")
+        except (ValueError, tk.TclError) as exc:
+            messagebox.showwarning("Input", str(exc))
             return
         self.ui_started()
         self._clear_all()
         self._found = 0
-        self._total = len(hosts)
+        self._total = host_count
         self.start_poll()
-        threading.Thread(target=self._worker, args=(hosts,), daemon=True).start()
+        threading.Thread(target=self._worker, args=(net.hosts(), options), daemon=True).start()
+
+    def stop_op(self):
+        self.stop_event.set()
 
     # ── Ping ──
 
@@ -2603,34 +2660,47 @@ class NetworkScanFrame(BaseToolFrame):
 
     # ── Worker ──
 
-    def _worker(self, hosts):
-        to_ms = self.timeout_var.get()
-        n_thr = min(self.threads_var.get(), 256)
-        resolve = self.resolve_var.get()
+    def _worker(self, hosts, options):
+        failed = False
+        try:
+            self._scan_hosts(hosts, options)
+        except Exception as exc:
+            failed = True
+            self.q(f"Scan failed: {exc}", "error")
+        finally:
+            stopped = self.stop_event.is_set()
+            def finish():
+                self.ui_done()
+                if stopped or failed:
+                    self._prog_lbl.configure(text="Scan stopped" if stopped else "Scan failed")
+            self.after(0, finish)
+
+    def _scan_hosts(self, hosts, options):
+        to_ms, n_thr, resolve = options
 
         # Phase 1: Discovery (ping sweep)
         self.after(0, lambda: self._prog_lbl.configure(text="Phase 1: Discovering hosts…"))
         alive_hosts = []
         done = 0
 
-        with ThreadPoolExecutor(max_workers=n_thr) as ex:
-            futs = {ex.submit(self._ping_host, ip, to_ms): ip for ip in hosts}
-            for fut in as_completed(futs):
-                if self.stop_event.is_set():
-                    return
-                ip = futs[fut]
-                done += 1
-                try:
-                    ok, rtt = fut.result()
-                    if ok:
-                        alive_hosts.append((str(ip), rtt))
-                except Exception:
-                    pass
-                pct = done / self._total * 0.5  # first 50% of progress
-                self.after(0, lambda p=pct, d=done: (
-                    self._prog_bar.set(p),
-                    self._prog_lbl.configure(text=f"Phase 1: Ping {d}/{self._total}"),
-                ))
+        last_update = 0
+        for ip, fut in scan_results(lambda ip: self._ping_host(ip, to_ms), hosts, n_thr, self.stop_event):
+            done += 1
+            try:
+                ok, rtt = fut.result()
+                if ok:
+                    alive_hosts.append((str(ip), rtt))
+            except Exception:
+                pass
+            pct = done / self._total * 0.5  # first 50% of progress
+            now = time.monotonic()
+            if now - last_update < 0.1 and done != self._total:
+                continue
+            last_update = now
+            self.after(0, lambda p=pct, d=done: (
+                self._prog_bar.set(p),
+                self._prog_lbl.configure(text=f"Phase 1: Ping {d}/{self._total}"),
+            ))
 
         if self.stop_event.is_set():
             return
@@ -2641,7 +2711,7 @@ class NetworkScanFrame(BaseToolFrame):
 
         if not alive_hosts:
             self.q("No hosts responded.", "warning")
-            self.after(0, lambda: (self.ui_done(), self._prog_bar.set(1),
+            self.after(0, lambda: (self._prog_bar.set(1),
                                    self._prog_lbl.configure(text="Done — 0 hosts")))
             return
 
@@ -2656,9 +2726,7 @@ class NetworkScanFrame(BaseToolFrame):
         # Detect gateway
         gateway_ip = ""
         try:
-            gateway_ip = _get_default_gateway(
-                get_local_ip() if not PSUTIL_AVAILABLE else get_local_ip()
-            )
+            gateway_ip = _get_default_gateway(get_local_ip())
         except Exception:
             pass
 
@@ -2679,24 +2747,20 @@ class NetworkScanFrame(BaseToolFrame):
 
         enriched = []
         edone = 0
-        with ThreadPoolExecutor(max_workers=enrich_thr) as ex:
-            futs = {ex.submit(_enrich_one, ipr): ipr for ipr in alive_hosts}
-            for fut in as_completed(futs):
-                if self.stop_event.is_set():
-                    return
-                edone += 1
-                try:
-                    data = fut.result()
-                    enriched.append(data)
-                    # Update tree incrementally
-                    self.after(0, lambda d=data: self._add_tree_row(d))
-                except Exception:
-                    pass
-                pct = 0.5 + (edone / len(alive_hosts)) * 0.5
-                self.after(0, lambda p=pct, d=edone, t=len(alive_hosts): (
-                    self._prog_bar.set(p),
-                    self._prog_lbl.configure(text=f"Phase 2: Enriching {d}/{t}"),
-                ))
+        for _, fut in scan_results(_enrich_one, alive_hosts, enrich_thr, self.stop_event):
+            edone += 1
+            try:
+                data = fut.result()
+                enriched.append(data)
+                # Update tree incrementally
+                self.after(0, lambda d=data: self._add_tree_row(d))
+            except Exception:
+                pass
+            pct = 0.5 + (edone / len(alive_hosts)) * 0.5
+            self.after(0, lambda p=pct, d=edone, t=len(alive_hosts): (
+                self._prog_bar.set(p),
+                self._prog_lbl.configure(text=f"Phase 2: Enriching {d}/{t}"),
+            ))
 
         # Sort by IP
         enriched.sort(key=lambda d: tuple(int(o) for o in d["ip"].split(".")))
@@ -2706,8 +2770,9 @@ class NetworkScanFrame(BaseToolFrame):
         self.after(0, self._rebuild_tree_sorted)
         fc2 = len(enriched)
         SessionHistory.log("Net Scanner", "Network scan", f"{fc2} hosts found")
-        self.after(0, lambda: (self.ui_done(), self._prog_bar.set(1),
-                               self._prog_lbl.configure(text=f"Done — {fc2} hosts enriched")))
+        if not self.stop_event.is_set():
+            self.after(0, lambda: (self._prog_bar.set(1),
+                                   self._prog_lbl.configure(text=f"Done — {fc2} hosts enriched")))
 
     # ── Tree management ──
 
@@ -3478,6 +3543,8 @@ class BandwidthFrame(BaseToolFrame):
         self._history_rx = [0] * 60
         self._history_tx = [0] * 60
         self._prev_io = None
+        self._prev_iface = None
+        self._monitor_job = None
         self._build()
 
     def _build(self):
@@ -3526,13 +3593,21 @@ class BandwidthFrame(BaseToolFrame):
         self._history_rx = [0] * 60
         self._history_tx = [0] * 60
         self._prev_io = None
+        self._prev_iface = None
         self._t0_io = None
         self._monitor_loop()
 
     def _stop_monitor(self):
         self._monitor_running = False
+        if self._monitor_job is not None:
+            self.after_cancel(self._monitor_job)
+            self._monitor_job = None
+
+    def on_app_close(self):
+        self._stop_monitor()
 
     def _monitor_loop(self):
+        self._monitor_job = None
         if not self._monitor_running:
             return
         iface = self.iface_var.get()
@@ -3550,30 +3625,31 @@ class BandwidthFrame(BaseToolFrame):
                 else:
                     rx_b = tx_b = pkts_rx = pkts_tx = 0
 
-            now = time.time()
-            if self._prev_io and self._t0_io:
+            now = time.monotonic()
+            rx_rate = tx_rate = 0
+            if self._prev_io is not None and self._t0_io is not None and iface == self._prev_iface:
                 dt = now - self._t0_io
-                if dt > 0:
+                if dt > 0 and rx_b >= self._prev_io[0] and tx_b >= self._prev_io[1]:
                     rx_rate = (rx_b - self._prev_io[0]) / dt
                     tx_rate = (tx_b - self._prev_io[1]) / dt
-                    self._history_rx = self._history_rx[1:] + [rx_rate]
-                    self._history_tx = self._history_tx[1:] + [tx_rate]
-
-                    self.bw_rx.configure(text=format_bytes_rate(rx_rate))
-                    self.bw_tx.configure(text=format_bytes_rate(tx_rate))
-                    self.bw_total_rx.configure(text=format_bytes_total(rx_b))
-                    self.bw_total_tx.configure(text=format_bytes_total(tx_b))
-                    self.bw_pkts_rx.configure(text=f"{pkts_rx:,}")
-                    self.bw_pkts_tx.configure(text=f"{pkts_tx:,}")
-                    self._draw_graph()
-
-            self._prev_io = (rx_b, tx_b)
-            self._t0_io = now
+            self._history_rx = self._history_rx[1:] + [rx_rate]
+            self._history_tx = self._history_tx[1:] + [tx_rate]
+            self.bw_rx.configure(text=format_bytes_rate(rx_rate))
+            self.bw_tx.configure(text=format_bytes_rate(tx_rate))
+            self.bw_total_rx.configure(text=format_bytes_total(rx_b))
+            self.bw_total_tx.configure(text=format_bytes_total(tx_b))
+            self.bw_pkts_rx.configure(text=f"{pkts_rx:,}")
+            self.bw_pkts_tx.configure(text=f"{pkts_tx:,}")
+            self._draw_graph()
+            self._prev_io = (rx_b, tx_b) if io is not None else None
+            self._t0_io = now if io is not None else None
+            self._prev_iface = iface
 
         except Exception:
-            pass
+            self._prev_io = None
+            self._t0_io = None
 
-        self.after(1000, self._monitor_loop)
+        self._monitor_job = self.after(1000, self._monitor_loop)
 
     def _draw_graph(self):
         c = self._canvas
@@ -6962,7 +7038,11 @@ class ScriptLabFrame(BaseToolFrame):
                 self._save_script()
                 if self._dirty:      # save failed (e.g. OSError) → abort run
                     return
-        cmd = self._build_run_command(self._current_path)
+        try:
+            cmd = self._build_run_command(self._current_path)
+        except FileNotFoundError as exc:
+            self.output.append(str(exc), "error")
+            return
         if not cmd:
             self.output.append("Cannot build run command for this file type.", "error")
             return

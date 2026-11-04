@@ -36,7 +36,7 @@ Writes use a temporary file in the same directory, flush it, and replace the tar
 
 Desktop checks need access to the graphical session. The GUI fixture replaces target addresses with documentation addresses, prevents automatic adapter/ARP refreshes, and never connects to a camera. It tests all 25 pages, repeated searches without accumulating scroll containers, cached navigation, history, four synthetic camera images, fullscreen/restore, Camera Finder handoff, and mocked tray lifecycle. The binary smoke uses an isolated working/data directory and intentionally terminates only its own process group after 15 seconds.
 
-The regression suite on 2026-09-06 ran **36 tests: 35 passed, one hardware Bluetooth integration test skipped**. The GUI checks passed without callback errors. Protected-code SHA-256 checks compare the camera classes, glyph wrappers, Linux tray-import guard, and Bluetooth GUI against the pre-change dirty-worktree backup, not Git HEAD.
+Verification on 2026-11-04 ran **66 tests: 65 passed, one hardware Bluetooth integration test skipped** on Linux. Windows CPython under Wine passed 61 tests and skipped five (the hardware test and four Linux pipe tests). All 25 GUI pages passed on both platforms with synthetic camera images and mocked network/Bluetooth operations. Both local binaries passed 15-second isolated startup checks without stderr. Protected-code SHA-256 checks compare the camera classes, glyph wrappers, Linux tray-import guard, and Bluetooth GUI against the pre-change dirty-worktree backup, not Git HEAD.
 
 ### Startup measurements
 
@@ -53,7 +53,7 @@ This is approximately five times faster window construction, not a claim about c
 ## Limits and next checks
 
 - Physical RTSP/MJPEG camera playback and active Bluetooth radio scanning still need a user-controlled hardware acceptance check. The synthetic test does not certify those paths end-to-end.
-- Windows tray behavior was checked with mocks, not on a Windows desktop. No Windows release was built.
+- Windows tray behavior was checked with mocks under Wine. A local Windows executable was built, but physical Windows and native tray acceptance tests remain pending.
 - Rapid resize/screenshot sequences can produce intermittent text redraw artifacts on this KDE/XWayland session. Similar artifacts were reproduced in the untouched backup UI, including the old footer/activity area. The cause is not established; no font installation, driver changes, or desktop configuration changes were attempted.
 - The Linux binary is a local Fedora build. The existing published release files and tags were not changed.
 - Stream Wall profiles, further platform support, and broader visual redesign are deferred to separate, testable changes.

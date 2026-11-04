@@ -112,41 +112,29 @@ class DeviceStore:
         target.is_cached_only = target.is_cached_only and event_source == "initial_cache"
         target.removed = False
 
-        for attr in (
-            "object_path",
-            "address",
-            "address_type",
-            "transport",
-            "name",
-            "alias",
-            "icon",
-            "class_of_device",
-            "appearance",
-            "paired",
-            "connected",
-            "trusted",
-            "blocked",
-            "legacy_pairing",
-            "services_resolved",
-            "rssi",
-            "tx_power",
-        ):
+        # PropertiesChanged contains only changed fields. Defaults on the
+        # temporary device must not erase pairing or address information.
+        fields = {
+            "address": "Address", "address_type": "AddressType", "name": "Name",
+            "alias": "Alias", "icon": "Icon", "class_of_device": "Class",
+            "appearance": "Appearance", "paired": "Paired", "connected": "Connected",
+            "trusted": "Trusted", "blocked": "Blocked", "legacy_pairing": "LegacyPairing",
+            "services_resolved": "ServicesResolved", "rssi": "RSSI", "tx_power": "TxPower",
+            "uuids": "UUIDs", "manufacturer_data": "ManufacturerData",
+            "manufacturer_ids": "ManufacturerData", "service_data": "ServiceData",
+            "advertising_flags": "AdvertisingFlags", "advertising_data": "AdvertisingData",
+        }
+        for attr, property_name in fields.items():
             value = getattr(source, attr)
-            if value not in (None, "", [], {}):
+            if (property_name in source.raw_bluez_properties
+                    or (event_source != "properties_changed" and not source.raw_bluez_properties
+                        and value not in (None, "", "unknown", [], {}))):
                 setattr(target, attr, value)
-
-        for attr in (
-            "uuids",
-            "manufacturer_data",
-            "manufacturer_ids",
-            "service_data",
-            "advertising_flags",
-            "advertising_data",
-            "raw_bluez_properties",
-        ):
-            value = getattr(source, attr)
-            if value not in (None, [], {}):
-                setattr(target, attr, value)
+        if source.object_path:
+            target.object_path = source.object_path
+        if source.transport != "unknown":
+            target.transport = source.transport
+        target.raw_bluez_properties.update(source.raw_bluez_properties)
 
         if source.rssi is not None:
             target.rssi_history.append(source.rssi)

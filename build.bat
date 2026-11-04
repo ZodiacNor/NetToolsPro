@@ -25,7 +25,7 @@ if defined NETTOOLS_PYTHON (
     where py >nul 2>nul
     if errorlevel 1 (set "PY_CMD=python") else (set "PY_CMD=py -3")
 )
-%PY_CMD% -c "import sys; raise SystemExit(0 if sys.version_info >= (3,10) else 1)"
+%PY_CMD% -c "import sys; raise SystemExit(0 if sys.version_info >= (3,11) else 1)"
 if errorlevel 1 exit /b 1
 if not exist "%VENV_PY%" %PY_CMD% -m venv .venv-windows
 if errorlevel 1 exit /b 1

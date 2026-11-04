@@ -1223,6 +1223,7 @@ class LinuxBackend(SystemBackend):
             interface=interface,
             cidr=cidr,
             timeout_s=120,
+            stop_event=stop_event,
         )
         try:
             for raw_line in scan_iter:
@@ -1256,7 +1257,9 @@ class LinuxBackend(SystemBackend):
             if callable(close):
                 close()
 
-        if found_count == 0:
+        if stop_event.is_set():
+            yield ("Scan aborted by user.", "warning")
+        elif found_count == 0:
             yield ("No devices found.", "warning")
         else:
             yield (f"Scan complete — {found_count} devices found.", "success")

@@ -26,14 +26,9 @@ def parse_arp_cache(output: str):
 
 def parse_arp_single(output: str, ip: str):
     """Extract MAC for a single IP from `arp -a <ip>` output. Returns MAC str or None."""
-    for line in output.splitlines():
-        if ip in line:
-            m = re.search(
-                r"([0-9a-f]{2}[:-](?:[0-9a-f]{2}[:-]){4}[0-9a-f]{2})",
-                line, re.I,
-            )
-            if m:
-                return m.group(1).upper().replace("-", ":")
+    for address, mac in parse_arp_cache(output):
+        if address == ip:
+            return mac
     return None
 
 
@@ -42,19 +37,12 @@ def parse_default_gateway(output: str, adapter_ip: str = "") -> str:
     Parse `route print -4` output and return the default gateway.
     If adapter_ip is provided, prefer the route whose interface matches it.
     """
+    routes = []
     for line in output.splitlines():
         parts = line.split()
-        if len(parts) >= 5 and parts[0] == "0.0.0.0":
-            gw   = parts[2]
-            iface = parts[4] if len(parts) > 4 else ""
-            if adapter_ip and (
-                iface == adapter_ip
-                or (gw != "0.0.0.0" and gw.startswith(adapter_ip.rsplit(".", 1)[0]))
-            ):
-                return gw
-    for line in output.splitlines():
-        parts = line.split()
-        if (len(parts) >= 4 and parts[0] == "0.0.0.0"
-                and parts[2] not in ("0.0.0.0", "")):
-            return parts[2]
-    return ""
+        if (len(parts) >= 5 and parts[:2] == ["0.0.0.0", "0.0.0.0"]
+                and parts[2] not in ("0.0.0.0", "On-link") and parts[4].isdigit()):
+            routes.append((parts[2], parts[3], int(parts[4])))
+    matching = [route for route in routes if route[1] == adapter_ip] if adapter_ip else []
+    candidates = matching or routes
+    return min(candidates, key=lambda route: route[2])[0] if candidates else ""

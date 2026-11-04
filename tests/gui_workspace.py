@@ -142,6 +142,7 @@ def main():
                     app._show(key)
                     assert app._current_key == key
                 assert len(app._frames) == 25
+                verify_scan_controls(app)
                 app._show("history")
                 assert "Synthetic action" in app._frames["history"].output.get("1.0", "end")
                 app._show("dashboard")
@@ -200,6 +201,74 @@ def main():
         app.mainloop()
         if errors:
             raise AssertionError(errors)
+
+
+def verify_scan_controls(app):
+    """Exercise real Tk controls with synthetic probes only."""
+    def wait_until(predicate, seconds=5):
+        completed = app_module.tk.BooleanVar(value=False)
+        deadline = time.monotonic() + seconds
+        def poll():
+            if predicate() or time.monotonic() >= deadline:
+                completed.set(True)
+            else:
+                app.after(10, poll)
+        app.after(10, poll)
+        app.wait_variable(completed)
+        assert predicate(), "Worker did not finish before deadline"
+
+    scanner = next(frame for frame in app._frames.values() if isinstance(frame, app_module.PortScanFrame))
+    scanner.target_var.set("192.0.2.1")
+    scanner._profile_var.set("Custom")
+    scanner.mode_var.set("range")
+    scanner.start_port.set(100)
+    scanner.end_port.set(1)
+    with patch.object(app_module.messagebox, "showwarning") as warning:
+        scanner._start()
+        warning.assert_called_once()
+        assert not scanner.running
+    scanner.mode_var.set("single")
+    scanner.single_port.set(53)
+    scanner.proto_var.set("UDP")
+    scanner.open_only_var.set(False)
+    with patch.object(scanner, "_udp_scan", return_value="open|filtered"), \
+            patch.object(scanner, "_fingerprint") as fingerprint:
+        scanner._start()
+        wait_until(lambda: not scanner.running)
+        scanner.drain_queue()
+        assert scanner._scan_stats == dict(scanned=1, open=0, closed=0, filtered=1)
+        assert "OPEN|FILTERED" in scanner.output.get("1.0", "end")
+        fingerprint.assert_not_called()
+
+    network = next(frame for frame in app._frames.values() if isinstance(frame, app_module.NetworkScanFrame))
+    network.net_var.set("192.0.2.0/24")
+    network.threads_var.set(2)
+    def probe(*_args):
+        network.stop_event.wait(0.2)
+        return False, 0
+    with patch.object(network, "_ping_host", side_effect=probe) as ping:
+        network._start()
+        app.after(30, network.stop_op)
+        wait_until(lambda: not network.running)
+        assert network.start_btn.cget("state") == "normal"
+        assert network._prog_lbl.cget("text") == "Scan stopped"
+        assert ping.call_count <= 4, "Cancelled scan kept issuing probes"
+        network.net_var.set("192.0.2.1/32")
+        network._start()
+        wait_until(lambda: not network.running)
+        assert network._prog_lbl.cget("text") == app_module._safe_ui_text("Done — 0 hosts")
+
+    bandwidth = next(frame for frame in app._frames.values() if isinstance(frame, app_module.BandwidthFrame))
+    counters = types.SimpleNamespace(bytes_recv=100, bytes_sent=200, packets_recv=1, packets_sent=2)
+    with patch.object(app_module.psutil, "net_io_counters", return_value=counters):
+        bandwidth._start_monitor()
+        first_job = bandwidth._monitor_job
+        bandwidth._stop_monitor()
+        assert first_job not in app.tk.call("after", "info")
+        bandwidth._start_monitor()
+        assert bandwidth._monitor_job != first_job
+        bandwidth._stop_monitor()
+    print("PASS: invalid ports, UDP uncertainty, network cancel/restart, bandwidth timer lifecycle")
 
 
 if __name__ == "__main__":

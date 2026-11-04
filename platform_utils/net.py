@@ -8,6 +8,9 @@ Phase 7:             Linux branch implementation (currently raises NotImplemente
 """
 import shutil
 import subprocess
+import os
+import selectors
+import time
 from .detect import IS_WINDOWS, IS_LINUX, SUBPROCESS_FLAGS
 from .parsers import windows as _win
 from .parsers import linux as _lin
@@ -229,7 +232,8 @@ def arp_scan_binary() -> str | None:
 
 def arp_scan_scan(interface: str | None = None,
                   cidr: str | None = None,
-                  timeout_s: int = 60):
+                  timeout_s: float = 60,
+                  stop_event=None):
     """Run arp-scan and yield raw lines.
 
     Yields one string per response line from `arp-scan --plain --format=...`.
@@ -243,6 +247,7 @@ def arp_scan_scan(interface: str | None = None,
         interface: e.g. "enp3s0". None -> arp-scan auto-selects.
         cidr: e.g. "192.168.1.0/24". None -> uses --localnet.
         timeout_s: hard timeout before the process is killed.
+        stop_event: optional threading.Event for interrupting a silent scan.
 
     Raises:
         FileNotFoundError: arp-scan is not installed.
@@ -274,20 +279,50 @@ def arp_scan_scan(interface: str | None = None,
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True,
-        bufsize=1,
+        bufsize=0,
     )
 
+    deadline = time.monotonic() + timeout_s
+    output_buffer = b""
+    error_buffer = b""
     try:
-        assert proc.stdout is not None
-        for line in proc.stdout:
-            yield line.rstrip("\n")
-        proc.wait(timeout=timeout_s)
+        # Drain both pipes: a full stderr pipe must not block stdout forever.
+        with selectors.DefaultSelector() as selector:
+            selector.register(proc.stdout, selectors.EVENT_READ)
+            selector.register(proc.stderr, selectors.EVENT_READ)
+            while selector.get_map():
+                if stop_event is not None and stop_event.is_set():
+                    return
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(cmd, timeout_s)
+                for key, _ in selector.select(min(0.1, remaining)):
+                    chunk = os.read(key.fd, 65536)
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                    elif key.fileobj is proc.stderr:
+                        error_buffer = (error_buffer + chunk)[-65536:]
+                    else:
+                        output_buffer += chunk
+                        while b"\n" in output_buffer:
+                            line, output_buffer = output_buffer.split(b"\n", 1)
+                            yield line.decode("utf-8", errors="replace").rstrip("\r")
+            if output_buffer:
+                yield output_buffer.decode("utf-8", errors="replace").rstrip("\r")
+        # A child may close its pipes without exiting; keep stop responsive.
+        while proc.poll() is None:
+            if stop_event is not None and stop_event.is_set():
+                return
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(cmd, timeout_s)
+            try:
+                proc.wait(timeout=min(0.1, remaining))
+            except subprocess.TimeoutExpired:
+                continue
 
         if proc.returncode != 0:
-            stderr_text = ""
-            if proc.stderr:
-                stderr_text = proc.stderr.read() or ""
+            stderr_text = error_buffer.decode("utf-8", errors="replace")
             stderr_lower = stderr_text.lower()
             if (
                 "root" in stderr_lower
@@ -312,6 +347,10 @@ def arp_scan_scan(interface: str | None = None,
                 proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
                 proc.kill()
+                proc.wait(timeout=2)
+        for pipe in (proc.stdout, proc.stderr):
+            if pipe is not None:
+                pipe.close()
 
 
 def parse_arp_scan_line(line: str) -> dict | None:

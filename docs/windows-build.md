@@ -6,7 +6,7 @@ version resources now match the application version.
 
 ## Build on Windows
 
-Install Windows CPython 3.10 or newer, then run:
+Install Windows CPython 3.11 or newer, then run:
 
 ```bat
 build.bat --setup
@@ -40,10 +40,11 @@ The helper requires a prepared project-owned CPython prefix. It verifies its
 private N: drive points to this project. Wine and CPython must already exist;
 it does not install system packages.
 
-Verification on 2026-10-04: source unit tests, a real Windows Tk GUI visiting all
-25 pages, search, synthetic four-slot camera rendering, fullscreen/restore,
-viewer handoff and mocked tray lifecycle. Packaged PE startup also stayed alive
-for 18 seconds with isolated saved data and no stderr. This is Wine evidence,
+Verification on 2026-11-04: 66 source unit tests (61 passed, five skipped), a real
+Windows Tk GUI visiting all 25 pages, search, synthetic four-slot camera rendering,
+fullscreen/restore, viewer handoff, scan cancellation/restart, bandwidth timers,
+and mocked tray lifecycle. Packaged PE startup also stayed alive for 15 seconds
+with isolated saved data and no stderr. This is Wine evidence,
 not a physical Windows, real camera, Bluetooth, or Windows tray acceptance test.
 No provider, camera, network scan, or Bluetooth discovery was invoked.
 
