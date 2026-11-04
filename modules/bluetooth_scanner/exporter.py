@@ -90,4 +90,3 @@ def flat_preview(device: BluetoothDevice) -> dict[str, Any]:
         "classification": device.classification,
         "badges": device.badges,
     }
-

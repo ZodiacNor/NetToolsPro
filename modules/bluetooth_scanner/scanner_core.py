@@ -158,4 +158,3 @@ class DeviceStore:
 
 def devices_from_iterable(items: Iterable[BluetoothDevice]) -> list[dict[str, Any]]:
     return [device.to_dict() for device in items]
-
