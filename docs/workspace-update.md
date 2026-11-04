@@ -1,4 +1,4 @@
-# Workspace update — v1.10.0 (local/unreleased)
+# Workspace update — v1.10.0
 
 ## What changed
 
@@ -55,5 +55,5 @@ This is approximately five times faster window construction, not a claim about c
 - Physical RTSP/MJPEG camera playback and active Bluetooth radio scanning still need a user-controlled hardware acceptance check. The synthetic test does not certify those paths end-to-end.
 - Windows tray behavior was checked with mocks under Wine. A local Windows executable was built, but physical Windows and native tray acceptance tests remain pending.
 - Rapid resize/screenshot sequences can produce intermittent text redraw artifacts on this KDE/XWayland session. Similar artifacts were reproduced in the untouched backup UI, including the old footer/activity area. The cause is not established; no font installation, driver changes, or desktop configuration changes were attempted.
-- The Linux binary is a local Fedora build. The existing published release files and tags were not changed.
+- The Linux release binary was built and tested on Fedora x86_64. Other distributions may require running from source or rebuilding locally.
 - Stream Wall profiles, further platform support, and broader visual redesign are deferred to separate, testable changes.

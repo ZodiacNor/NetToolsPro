@@ -2,7 +2,20 @@
 
 All notable changes to NetTools Pro are documented here.
 
-## Unreleased - 2026-11-04 (local bug fixes)
+## [1.10.0] - 2026-11-04
+
+- Publish Linux x86_64 and Windows x64 executables with SHA-256 checksums.
+- Add the Fedora/Linux Bluetooth scanner, sidebar tool search, dashboard shortcuts,
+  persistent settings/favorites, and tool pages created on first use.
+- Include the scan cancellation, diagnostic accuracy, Bluetooth property, and
+  bandwidth measurement fixes described in the development notes below.
+- Verify 66 unit tests on Linux (65 passed, one hardware test skipped) and under
+  Windows/Wine (61 passed, five skipped), all 25 GUI pages, and isolated binary startup.
+  Physical Windows, camera, Bluetooth, and network acceptance tests remain pending.
+
+See [release notes](docs/releases/v1.10.0.md) for downloads and verification details.
+
+## Development notes - 2026-11-04 (scan fixes)
 
 - Require Pillow 13.0.0 or newer and document Python 3.11 as the minimum version;
   pin Pillow 13.0.0 in the Windows build environment.
@@ -24,7 +37,7 @@ All notable changes to NetTools Pro are documented here.
 - Add offline regressions, GUI scan-control checks, and a repeatable queue-memory
   benchmark. Camera playback and the protected GUI baseline remain unchanged.
 
-## v1.10.0 — 2026-10-04 (local Windows delivery)
+## Development notes - 2026-10-04 (local Windows delivery)
 
 - Build the matching standalone Windows executable with Windows CPython 3.13
   and PyInstaller in a project-owned Wine prefix.
@@ -36,7 +49,7 @@ All notable changes to NetTools Pro are documented here.
 - Verify all 25 tool pages on Linux and Wine, plus frozen startup on both.
   Physical Windows camera, tray and Bluetooth testing remains pending.
 
-## [Unreleased — v1.10.0] - 2026-09-06
+## Development notes - 2026-09-06 (workspace update)
 
 ### Added
 - Sidebar tool search with Ctrl+K, Enter, Escape, category matching, and common aliases such as RTSP and BLE.

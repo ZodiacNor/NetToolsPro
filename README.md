@@ -24,7 +24,7 @@ The application is intended for IT technicians, network administrators, field se
 
 ![NetTools Pro dashboard](docs/screenshots/workspace-dashboard.png)
 
-The dashboard screenshot shows the local v1.10.0 workspace update. Published release assets may still show the previous layout.
+The dashboard screenshot shows the v1.10.0 workspace update.
 
 ### Camera Discovery
 
@@ -72,7 +72,7 @@ The Linux binary is provided for x86_64 Linux systems. It has been built and tes
 
 ## Highlights
 
-### Workspace (v1.10.0, local/unreleased)
+### Workspace (v1.10.0)
 
 - Faster startup: tool pages are created when first opened and then retained
 - Find tools with **Ctrl+K**, including terms such as RTSP, BLE, CIDR, and wake on LAN; **Enter** opens the first match and **Escape** clears the search
@@ -266,7 +266,7 @@ NetToolsPro/
 └── README.md
 ```
 
-The `release/` directory is used as a local output folder for build artifacts and is excluded from version control. Release binaries are distributed via GitHub Releases, not committed to the repository.
+The `dist/` directory contains the current local builds and is excluded from version control. Release binaries are distributed via GitHub Releases, not committed to the repository.
 
 ## Roadmap
 
@@ -288,9 +288,11 @@ Created by Bengt Simon Røch Dragseth.
 
 Released under the MIT License. See [LICENSE](LICENSE) for details.
 
-## Local completion build (2026-10-04)
+## Version 1.10.0 (2026-11-04)
 
 Linux: `dist/NetToolsPro.bin`. Windows: `dist/NetToolsPro.exe`.
-Both contain 1.10.0; neither is a newly published GitHub release.
+Download the published binaries and `SHA256SUMS.txt` from the
+[v1.10.0 release](https://github.com/ZodiacNor/NetToolsPro/releases/tag/v1.10.0).
+See the [release notes](docs/releases/v1.10.0.md) for changes and verification.
 See [Windows build and verification](docs/windows-build.md) for the reproducible
 build, isolated Wine checks, and physical-platform limitations.
