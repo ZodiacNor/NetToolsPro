@@ -57,17 +57,15 @@ Thumbs.db
 .claude/
 AGENTS.md
 
-# Local environments and private state
+# Private agent notes and local verification
 /.handover.md
 /.learning.md
+/backup/
+/reports/
+/.work/
 
 # Local private state (not project source)
 /docs/internal-no/imported-home-2026-10-02/
 
+# Windows build environment
 /.venv-windows/
-
-/backup/
-
-/reports/
-
-/.work/
