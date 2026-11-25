@@ -40,6 +40,12 @@ The dashboard screenshot shows the v1.10.0 workspace update.
 
 ---
 
+## Local candidate
+
+Version **1.10.2** in local `dist/` bounds reverse DNS and stops further host probes
+after cancellation. It also restores live BlueZ device updates, closes failed scan
+connections, and exports binary Bluetooth advertisements correctly. It has not been published. The public release below remains 1.10.0.
+
 ## Latest Release
 
 | Platform | Asset | Notes |

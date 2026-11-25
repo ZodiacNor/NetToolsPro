@@ -1,7 +1,7 @@
-# Windows build — 1.10.0
+# Windows build — local 1.10.2 candidate
 
 The local Windows executable is `dist/NetToolsPro.exe` (x64 PE GUI).
-It includes the same 1.10.0 workspace code as the Linux binary. File and product
+It includes the same 1.10.2 workspace code as the Linux binary. File and product
 version resources now match the application version.
 
 ## Build on Windows

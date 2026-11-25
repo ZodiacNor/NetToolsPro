@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NetTools Pro v1.10.0 - Network Engineering Toolkit
+NetTools Pro v1.10.2 - Network Engineering Toolkit
 A cross-platform network diagnostic and utility toolkit.
 
 Author:      Bengt Simon Røch Dragseth
@@ -10,7 +10,7 @@ Copyright:   Copyright (c) 2026 Bengt Simon Røch Dragseth
 Repository:  https://github.com/ZodiacNor/NetToolsPro
 """
 
-__version__   = "1.10.0"
+__version__   = "1.10.2"
 __author__    = "Bengt Simon Røch Dragseth"
 __license__   = "MIT"
 __copyright__ = "Copyright (c) 2026 Bengt Simon Røch Dragseth"
@@ -92,7 +92,7 @@ SUBPROCESS_FLAGS = _pu_detect.SUBPROCESS_FLAGS
 
 # ==================== Application Metadata ====================
 APP_NAME        = "NetTools Pro"
-APP_VERSION     = "1.10.0"
+APP_VERSION     = "1.10.2"
 APP_AUTHOR      = "Bengt Simon Røch Dragseth"
 APP_LICENSE     = "MIT"
 APP_COPYRIGHT   = "Copyright (c) 2026 Bengt Simon Røch Dragseth"
@@ -2587,10 +2587,12 @@ class NetworkScanFrame(BaseToolFrame):
     # ── Port probe ──
 
     @staticmethod
-    def _probe_ports(ip, timeout_ms=400):
+    def _probe_ports(ip, timeout_ms=400, stop_event=None):
         """Quick TCP connect probe on common ports. Returns dict of label->bool."""
         result = {}
         for label, port in NetworkScanFrame._PROBE_PORTS:
+            if stop_event is not None and stop_event.is_set():
+                break
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     s.settimeout(timeout_ms / 1000)
@@ -2599,6 +2601,17 @@ class NetworkScanFrame(BaseToolFrame):
             except Exception:
                 result[label] = False
         return result
+
+    @staticmethod
+    def _resolve_hostname(ip_str, timeout=1.0):
+        """Resolve a DNS PTR record within a finite lifetime, without NSS blocking."""
+        if DNS_AVAILABLE:
+            try:
+                answer = dns.resolver.resolve_address(ip_str, lifetime=timeout, search=False)
+                return answer[0].target.to_text(omit_final_dot=True)
+            except (dns.exception.DNSException, OSError, ValueError):
+                pass
+        return "—"
 
     # ── Enrich a single host ──
 
@@ -2736,13 +2749,15 @@ class NetworkScanFrame(BaseToolFrame):
 
         def _enrich_one(ip_rtt):
             ip_str, rtt = ip_rtt
-            hostname = "—"
-            if resolve:
-                try:
-                    hostname = socket.gethostbyaddr(ip_str)[0]
-                except Exception:
-                    pass
-            port_result = self._probe_ports(ip_str, timeout_ms=min(to_ms, 600))
+            if self.stop_event.is_set():
+                return None
+            hostname = self._resolve_hostname(ip_str) if resolve else "—"
+            if self.stop_event.is_set():
+                return None
+            port_result = self._probe_ports(ip_str, timeout_ms=min(to_ms, 600),
+                                            stop_event=self.stop_event)
+            if self.stop_event.is_set():
+                return None
             return self._enrich_host(ip_str, rtt, hostname, arp_map, gateway_ip, port_result)
 
         enriched = []

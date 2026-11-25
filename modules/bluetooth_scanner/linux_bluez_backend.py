@@ -153,112 +153,124 @@ class LinuxBlueZBackend(BluetoothScannerBackend):
         dbus = await _dbus_import()
         self._bluez_version = get_bluez_version()
         bus, manager = await _connect_bluez(dbus)
-        objects = await manager.call_get_managed_objects()
-        adapters = await self._adapters_from_objects(dbus, bus, objects)
-        adapter = _select_adapter(adapters, config.adapter_id)
-        if adapter is None:
-            self._emit(BluetoothEvent("adapter_missing", session_id=session_id, message="No matching Bluetooth adapter found."))
-            raise BluetoothScannerError("adapter_missing", "No matching Bluetooth adapter found.")
-        if not adapter.powered:
-            raise BluetoothScannerError(
-                "adapter_powered_off",
-                f"Bluetooth adapter {adapter.adapter_id} is powered off.",
-                "Turn Bluetooth on in Fedora Settings or bluetoothctl, then retry. Do not run the whole app as root.",
-            )
-
-        adapter_iface = await _adapter_interface(dbus, bus, adapter.object_path)
-        supported_filters = await _safe_call(adapter_iface.call_get_discovery_filters, default=[])
-        adapter.discovery_filters = list(supported_filters or [])
-        self._emit(BluetoothEvent("adapter_found", session_id=session_id, adapter=adapter))
-
-        filter_dict = _build_discovery_filter(dbus.Variant, config, adapter.discovery_filters)
-        if filter_dict:
-            try:
-                await adapter_iface.call_set_discovery_filter(filter_dict)
-            except Exception as e:
-                self._emit(
-                    BluetoothEvent(
-                        "diagnostic_error",
-                        session_id=session_id,
-                        message=f"SetDiscoveryFilter failed: {e}",
-                        payload={"code": "filter_failed", "detail": str(e)},
-                    )
-                )
-
-        if config.include_cached:
-            for path, ifaces in objects.items():
-                if DEVICE_IFACE not in ifaces or not _path_under_adapter(path, adapter.object_path):
-                    continue
-                device = device_from_bluez_properties(
-                    session_id=session_id,
-                    adapter_id=adapter.adapter_id,
-                    object_path=path,
-                    properties=ifaces[DEVICE_IFACE],
-                    event_source="initial_cache",
-                )
-                if device.paired and not config.include_paired:
-                    continue
-                updated = store.upsert(device, "initial_cache")
-                self._emit(BluetoothEvent("device_added", session_id=session_id, device=updated))
-
-        def on_message(message: Any) -> None:
-            if getattr(message, "message_type", None) != dbus.MessageType.SIGNAL:
-                return
-            path = getattr(message, "path", "") or ""
-            if message.interface == OBJECT_MANAGER_IFACE and message.member == "InterfacesAdded":
-                obj_path, ifaces = message.body
-                if not _path_under_adapter(obj_path, adapter.object_path):
-                    return
-                if DEVICE_IFACE in ifaces:
-                    device = device_from_bluez_properties(session_id, adapter.adapter_id, obj_path, ifaces[DEVICE_IFACE], "interfaces_added")
-                    updated = store.upsert(device, "interfaces_added")
-                    self._emit(BluetoothEvent("device_added", session_id=session_id, device=updated))
-            elif message.interface == OBJECT_MANAGER_IFACE and message.member == "InterfacesRemoved":
-                obj_path, _ifaces = message.body
-                if not _path_under_adapter(obj_path, adapter.object_path):
-                    return
-                removed = store.mark_removed(obj_path)
-                if removed:
-                    self._emit(BluetoothEvent("device_removed", session_id=session_id, device=removed))
-            elif message.interface == PROPERTIES_IFACE and message.member == "PropertiesChanged":
-                if not _path_under_adapter(path, adapter.object_path):
-                    return
-                iface_name, changed, _invalidated = message.body
-                if iface_name == DEVICE_IFACE:
-                    device = device_from_bluez_properties(session_id, adapter.adapter_id, path, changed, "properties_changed")
-                    updated = store.upsert(device, "properties_changed")
-                    self._emit(BluetoothEvent("device_updated", session_id=session_id, device=updated))
-
-        bus.add_message_handler(on_message)
-        await adapter_iface.call_start_discovery()
-        self._emit(BluetoothEvent("scan_session_started", session_id=session_id, adapter=adapter, payload={"config": config.to_dict()}))
-
         try:
-            deadline = None if config.continuous or not config.duration_seconds else asyncio.get_running_loop().time() + config.duration_seconds
-            while not stop_event.is_set():
-                if deadline is not None and asyncio.get_running_loop().time() >= deadline:
-                    break
-                await asyncio.sleep(0.1)
-        finally:
-            try:
-                await adapter_iface.call_stop_discovery()
-            except Exception as e:
-                self._emit(
-                    BluetoothEvent(
-                        "diagnostic_error",
-                        session_id=session_id,
-                        message=f"StopDiscovery failed: {e}",
-                        payload={"code": "stop_failed", "detail": str(e)},
-                    )
+            objects = await manager.call_get_managed_objects()
+            adapters = await self._adapters_from_objects(dbus, bus, objects)
+            adapter = _select_adapter(adapters, config.adapter_id)
+            if adapter is None:
+                self._emit(BluetoothEvent("adapter_missing", session_id=session_id, message="No matching Bluetooth adapter found."))
+                raise BluetoothScannerError("adapter_missing", "No matching Bluetooth adapter found.")
+            if not adapter.powered:
+                raise BluetoothScannerError(
+                    "adapter_powered_off",
+                    f"Bluetooth adapter {adapter.adapter_id} is powered off.",
+                    "Turn Bluetooth on in Fedora Settings or bluetoothctl, then retry. Do not run the whole app as root.",
                 )
+
+            adapter_iface = await _adapter_interface(dbus, bus, adapter.object_path)
+            supported_filters = await _safe_call(adapter_iface.call_get_discovery_filters, default=[])
+            adapter.discovery_filters = list(supported_filters or [])
+            self._emit(BluetoothEvent("adapter_found", session_id=session_id, adapter=adapter))
+
+            filter_dict = _build_discovery_filter(dbus.Variant, config, adapter.discovery_filters)
+            if filter_dict:
+                try:
+                    await adapter_iface.call_set_discovery_filter(filter_dict)
+                except Exception as e:
+                    self._emit(
+                        BluetoothEvent(
+                            "diagnostic_error",
+                            session_id=session_id,
+                            message=f"SetDiscoveryFilter failed: {e}",
+                            payload={"code": "filter_failed", "detail": str(e)},
+                        )
+                    )
+
+            if config.include_cached:
+                for path, ifaces in objects.items():
+                    if DEVICE_IFACE not in ifaces or not _path_under_adapter(path, adapter.object_path):
+                        continue
+                    device = device_from_bluez_properties(
+                        session_id=session_id,
+                        adapter_id=adapter.adapter_id,
+                        object_path=path,
+                        properties=ifaces[DEVICE_IFACE],
+                        event_source="initial_cache",
+                    )
+                    if device.paired and not config.include_paired:
+                        continue
+                    updated = store.upsert(device, "initial_cache")
+                    self._emit(BluetoothEvent("device_added", session_id=session_id, device=updated))
+
+            def on_message(message: Any) -> None:
+                if getattr(message, "message_type", None) != dbus.MessageType.SIGNAL:
+                    return
+                path = getattr(message, "path", "") or ""
+                if message.interface == OBJECT_MANAGER_IFACE and message.member == "InterfacesAdded":
+                    obj_path, ifaces = message.body
+                    if not _path_under_adapter(obj_path, adapter.object_path):
+                        return
+                    if DEVICE_IFACE in ifaces:
+                        device = device_from_bluez_properties(session_id, adapter.adapter_id, obj_path, ifaces[DEVICE_IFACE], "interfaces_added")
+                        updated = store.upsert(device, "interfaces_added")
+                        self._emit(BluetoothEvent("device_added", session_id=session_id, device=updated))
+                elif message.interface == OBJECT_MANAGER_IFACE and message.member == "InterfacesRemoved":
+                    obj_path, _ifaces = message.body
+                    if not _path_under_adapter(obj_path, adapter.object_path):
+                        return
+                    removed = store.mark_removed(obj_path)
+                    if removed:
+                        self._emit(BluetoothEvent("device_removed", session_id=session_id, device=removed))
+                elif message.interface == PROPERTIES_IFACE and message.member == "PropertiesChanged":
+                    if not _path_under_adapter(path, adapter.object_path):
+                        return
+                    iface_name, changed, _invalidated = message.body
+                    if iface_name == DEVICE_IFACE:
+                        device = device_from_bluez_properties(session_id, adapter.adapter_id, path, changed, "properties_changed")
+                        updated = store.upsert(device, "properties_changed")
+                        self._emit(BluetoothEvent("device_updated", session_id=session_id, device=updated))
+
+            bus.add_message_handler(on_message)
+            match_rules = [
+                f"type='signal',sender='{BLUEZ_SERVICE}',interface='{OBJECT_MANAGER_IFACE}'",
+                f"type='signal',sender='{BLUEZ_SERVICE}',interface='{PROPERTIES_IFACE}',path_namespace='{adapter.object_path}'",
+            ]
+            subscribed = []
+            discovery_started = False
             try:
+                for rule in match_rules:
+                    await _signal_match(dbus, bus, "AddMatch", rule)
+                    subscribed.append(rule)
+                await adapter_iface.call_start_discovery()
+                discovery_started = True
+                self._emit(BluetoothEvent("scan_session_started", session_id=session_id, adapter=adapter, payload={"config": config.to_dict()}))
+                deadline = None if config.continuous or not config.duration_seconds else asyncio.get_running_loop().time() + config.duration_seconds
+                while not stop_event.is_set():
+                    if deadline is not None and asyncio.get_running_loop().time() >= deadline:
+                        break
+                    await asyncio.sleep(0.1)
+            finally:
+                if discovery_started:
+                    try:
+                        await adapter_iface.call_stop_discovery()
+                    except Exception as e:
+                        self._emit(
+                            BluetoothEvent(
+                                "diagnostic_error",
+                                session_id=session_id,
+                                message=f"StopDiscovery failed: {e}",
+                                payload={"code": "stop_failed", "detail": str(e)},
+                            )
+                        )
                 bus.remove_message_handler(on_message)
-            except Exception:
-                pass
-            try:
-                bus.disconnect()
-            except Exception:
-                pass
+                for rule in reversed(subscribed):
+                    try:
+                        await _signal_match(dbus, bus, "RemoveMatch", rule)
+                    except Exception:
+                        # Disconnect below also removes this connection's matches.
+                        pass
+        finally:
+            bus.disconnect()
 
     async def _list_adapters_async(self) -> list[BluetoothAdapter]:
         dbus = await _dbus_import()
@@ -384,7 +396,9 @@ def _unwrap(value: Any, default: Any = None) -> Any:
     if isinstance(value, (list, tuple, set)):
         return [_unwrap(v) for v in value]
     if isinstance(value, (bytes, bytearray)):
-        return bytes(value)
+        # BlueZ byte arrays must remain lossless and JSON-serializable, including
+        # nested raw advertisement data retained for session exports.
+        return list(value)
     return value
 
 
@@ -427,7 +441,7 @@ def _infer_transport(device: BluetoothDevice) -> str:
 
 async def _dbus_import() -> Any:
     try:
-        from dbus_next import Variant
+        from dbus_next import Message, Variant
         from dbus_next.aio import MessageBus
         from dbus_next.constants import BusType, MessageType
     except ImportError as e:
@@ -438,11 +452,27 @@ async def _dbus_import() -> Any:
         ) from e
 
     return SimpleNamespace(
+        Message=Message,
         Variant=Variant,
         MessageBus=MessageBus,
         BusType=BusType,
         MessageType=MessageType,
     )
+
+
+
+async def _signal_match(dbus: Any, bus: Any, member: str, rule: str) -> None:
+    """Route BlueZ broadcasts to this connection using the public D-Bus API."""
+    reply = await bus.call(dbus.Message(
+        destination="org.freedesktop.DBus", path="/org/freedesktop/DBus",
+        interface="org.freedesktop.DBus", member=member,
+        signature="s", body=[rule],
+    ))
+    if reply.message_type == dbus.MessageType.ERROR:
+        raise BluetoothScannerError(
+            "signal_subscription_failed", "Could not subscribe to Bluetooth device updates.",
+            "Check the D-Bus connection and retry the scan.",
+        )
 
 
 async def _connect_bluez(dbus: Any) -> tuple[Any, Any]:

@@ -2,6 +2,21 @@
 
 All notable changes to NetTools Pro are documented here.
 
+## [1.10.2] - Local candidate, 2026-11-09
+
+- Subscribe to BlueZ D-Bus signals so new devices and RSSI updates reach the scanner.
+- Disconnect the scan bus and remove subscriptions even when discovery cannot start.
+- Preserve binary advertisement fields as JSON-compatible byte arrays in raw exports.
+- Verify signal delivery against a private D-Bus daemon and scan the physical Linux
+  adapter. Native Windows and IP camera acceptance remain pending.
+
+## [1.10.1] - Local candidate, 2026-11-09
+
+- Bound network-scanner reverse DNS to a one-second PTR-query lifetime.
+- Stop before subsequent port/HTTP probes after cancellation and check cancellation
+  between port probes. System hosts-file and mDNS naming are not queried by this PTR lookup.
+- Keep the published 1.10.0 release unchanged; this candidate is local.
+
 ## [1.10.0] - 2026-11-04
 
 - Publish Linux x86_64 and Windows x64 executables with SHA-256 checksums.
